@@ -44,6 +44,20 @@ function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): nu
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+function formatEta(remainingMinutes: number, lang: "en" | "te"): string {
+  if (remainingMinutes <= 0) return lang === "te" ? "చేరుకున్నారు" : "Arrived";
+  const h = Math.floor(remainingMinutes / 60);
+  const m = remainingMinutes % 60;
+  if (lang === "te") {
+    if (h > 0 && m > 0) return `${h} గం ${m} నిమి`;
+    if (h > 0) return `${h} గంటలు`;
+    return `${m} నిమిషాలు`;
+  }
+  if (h > 0 && m > 0) return `${h}h ${m}m`;
+  if (h > 0) return `${h} hr${h > 1 ? "s" : ""}`;
+  return `${m} min`;
+}
+
 function speak(text: string, lang: "en" | "te") {
   if (!("speechSynthesis" in window)) return;
   window.speechSynthesis.cancel();
@@ -75,6 +89,7 @@ export default function MapTracker() {
 
   const [displayPos, setDisplayPos] = useState<[number, number] | null>(null);
   const [busInfo, setBusInfo] = useState<SimBusInfo | null>(null);
+  const [eta, setEta] = useState<string | null>(null);
 
   const animFrameRef = useRef<number | null>(null);
   const currentPosRef = useRef<[number, number] | null>(null);
