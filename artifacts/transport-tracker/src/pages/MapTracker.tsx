@@ -90,6 +90,7 @@ export default function MapTracker() {
   const [displayPos, setDisplayPos] = useState<[number, number] | null>(null);
   const [busInfo, setBusInfo] = useState<SimBusInfo | null>(null);
   const [eta, setEta] = useState<string | null>(null);
+  const [remainingKm, setRemainingKm] = useState<number | null>(null);
 
   const animFrameRef = useRef<number | null>(null);
   const currentPosRef = useRef<[number, number] | null>(null);
@@ -133,6 +134,8 @@ export default function MapTracker() {
     currentPosRef.current = fromCoord;
     setDisplayPos(fromCoord);
     setBusHistory([fromCoord]);
+    setEta(formatEta(totalMinutes, lang));
+    setRemainingKm(parseFloat(distKm.toFixed(1)));
 
     function animateTo(fromPos: [number, number], toPos: [number, number]) {
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
@@ -161,6 +164,10 @@ export default function MapTracker() {
 
       setBusHistory(prev => [...prev.slice(-200), newPos]);
       lastHistoryRef.current = newPos;
+
+      const remaining = Math.max(0, totalMinutes - step);
+      setEta(formatEta(remaining, lang));
+      setRemainingKm(parseFloat((distKm * (1 - progress)).toFixed(1)));
 
       const isNearEnd = progress >= 0.95;
       setBusInfo(prev => prev ? {
@@ -228,6 +235,8 @@ export default function MapTracker() {
     setBusHistory([]);
     setDisplayPos(null);
     setBusInfo(null);
+    setEta(null);
+    setRemainingKm(null);
     setFrom("");
     setTo("");
     arrivedRef.current = false;
@@ -428,11 +437,28 @@ export default function MapTracker() {
 
       {isTracking && busInfo && (
         <div className="absolute top-[8.5rem] right-3 z-[1000] pointer-events-none">
-          <div className="bg-white/95 backdrop-blur-md shadow-xl rounded-2xl border border-white/60 p-3 w-44">
+          <div className="bg-white/95 backdrop-blur-md shadow-xl rounded-2xl border border-white/60 p-3 w-48">
             <div className="flex items-center gap-2 mb-2">
               <span className="text-lg">🚌</span>
               <span className="font-bold text-sm text-gray-800">{busInfo.busNumber}</span>
             </div>
+
+            {/* ETA Highlight */}
+            {eta && (
+              <div className="bg-orange-50 border border-orange-200 rounded-xl px-3 py-2 mb-2 flex items-center justify-between">
+                <div>
+                  <div className="text-[10px] font-semibold text-orange-500 uppercase tracking-wide">{t("info.eta")}</div>
+                  <div className="text-base font-bold text-orange-700 leading-tight">{eta}</div>
+                </div>
+                {remainingKm !== null && (
+                  <div className="text-right">
+                    <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">{t("info.remaining")}</div>
+                    <div className="text-sm font-bold text-gray-700">{remainingKm} km</div>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="space-y-1 text-xs">
               <div className="flex items-center justify-between">
                 <span className="text-gray-500">{t("info.status")}</span>
