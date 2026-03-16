@@ -58,6 +58,31 @@ function formatEta(remainingMinutes: number, lang: "en" | "te"): string {
   return `${m} min`;
 }
 
+function getIntermediateStops(from: string, to: string): string[] {
+  const fromCoord = VILLAGE_COORDS[from];
+  const toCoord = VILLAGE_COORDS[to];
+  if (!fromCoord || !toCoord) return [];
+  const [lat1, lng1] = fromCoord;
+  const [lat2, lng2] = toCoord;
+  const dx = lat2 - lat1;
+  const dy = lng2 - lng1;
+  const lenSq = dx * dx + dy * dy;
+  if (lenSq === 0) return [];
+
+  const stops: { name: string; t: number }[] = [];
+  for (const [name, coord] of Object.entries(VILLAGE_COORDS)) {
+    if (name === from || name === to) continue;
+    const [lat, lng] = coord;
+    const t = ((lat - lat1) * dx + (lng - lng1) * dy) / lenSq;
+    if (t <= 0.05 || t >= 0.95) continue;
+    const projLat = lat1 + t * dx;
+    const projLng = lng1 + t * dy;
+    const perpDistKm = haversineKm(lat, lng, projLat, projLng);
+    if (perpDistKm <= 35) stops.push({ name, t });
+  }
+  return stops.sort((a, b) => a.t - b.t).map(s => s.name);
+}
+
 function speak(text: string, lang: "en" | "te") {
   if (!("speechSynthesis" in window)) return;
   window.speechSynthesis.cancel();
@@ -91,6 +116,9 @@ export default function MapTracker() {
   const [busInfo, setBusInfo] = useState<SimBusInfo | null>(null);
   const [eta, setEta] = useState<string | null>(null);
   const [remainingKm, setRemainingKm] = useState<number | null>(null);
+  const [intermediateStops, setIntermediateStops] = useState<string[]>([]);
+  const [passedStopCount, setPassedStopCount] = useState(0);
+  const [stopsExpanded, setStopsExpanded] = useState(true);
 
   const animFrameRef = useRef<number | null>(null);
   const currentPosRef = useRef<[number, number] | null>(null);
@@ -121,6 +149,10 @@ export default function MapTracker() {
     const distKm = haversineKm(fromCoord[0], fromCoord[1], toCoord[0], toCoord[1]);
     const totalMinutes = Math.max(1, Math.ceil((distKm / SPEED_KMH) * 60));
     let step = 0;
+
+    const stops = getIntermediateStops(from, to);
+    setIntermediateStops(stops);
+    setPassedStopCount(0);
 
     setBusInfo({
       busNumber: "TS01-1234",
@@ -168,6 +200,12 @@ export default function MapTracker() {
       const remaining = Math.max(0, totalMinutes - step);
       setEta(formatEta(remaining, lang));
       setRemainingKm(parseFloat((distKm * (1 - progress)).toFixed(1)));
+
+      const passed = stops.filter((_, i) => {
+        const stopT = (i + 1) / (stops.length + 1);
+        return progress >= stopT;
+      }).length;
+      setPassedStopCount(passed);
 
       const isNearEnd = progress >= 0.95;
       setBusInfo(prev => prev ? {
@@ -237,6 +275,8 @@ export default function MapTracker() {
     setBusInfo(null);
     setEta(null);
     setRemainingKm(null);
+    setIntermediateStops([]);
+    setPassedStopCount(0);
     setFrom("");
     setTo("");
     arrivedRef.current = false;
@@ -437,7 +477,7 @@ export default function MapTracker() {
 
       {isTracking && busInfo && (
         <div className="absolute top-[8.5rem] right-3 z-[1000] pointer-events-none">
-          <div className="bg-white/95 backdrop-blur-md shadow-xl rounded-2xl border border-white/60 p-3 w-48">
+          <div className="bg-white/95 backdrop-blur-md shadow-xl rounded-2xl border border-white/60 p-3 w-52">
             <div className="flex items-center gap-2 mb-2">
               <span className="text-lg">🚌</span>
               <span className="font-bold text-sm text-gray-800">{busInfo.busNumber}</span>
@@ -459,7 +499,80 @@ export default function MapTracker() {
               </div>
             )}
 
-            <div className="space-y-1 text-xs">
+            {/* Stops list */}
+            <div className="mb-2">
+              <button
+                className="pointer-events-auto w-full flex items-center justify-between text-[10px] font-semibold text-gray-500 uppercase tracking-wide px-1 mb-1.5"
+                onClick={() => setStopsExpanded(v => !v)}
+              >
+                <span>{t("info.stops")} ({intermediateStops.length > 0 ? intermediateStops.length + 2 : 2})</span>
+                <ChevronDown className={`w-3 h-3 transition-transform ${stopsExpanded ? "rotate-180" : ""}`} />
+              </button>
+              {stopsExpanded && (
+                <div className="space-y-0.5 max-h-40 overflow-y-auto pr-0.5">
+                  {/* Origin */}
+                  <div className="flex items-center gap-2 text-xs py-0.5">
+                    <div className="w-4 h-4 rounded-full bg-green-500 flex items-center justify-center shrink-0">
+                      <div className="w-1.5 h-1.5 rounded-full bg-white" />
+                    </div>
+                    <span className="font-semibold text-green-700 truncate">{villageName(from)}</span>
+                  </div>
+                  {/* Intermediate stops */}
+                  {intermediateStops.length === 0 ? (
+                    <div className="flex items-center gap-2 text-xs py-0.5 pl-1.5">
+                      <div className="w-0.5 h-4 bg-gray-200 ml-[5px]" />
+                      <span className="text-gray-400 italic text-[10px]">{t("info.direct")}</span>
+                    </div>
+                  ) : (
+                    intermediateStops.map((stop, i) => {
+                      const isPassed = i < passedStopCount;
+                      const isNext = i === passedStopCount;
+                      return (
+                        <div key={stop}>
+                          <div className="flex items-center gap-0 ml-[7px]">
+                            <div className={`w-0.5 h-2.5 ${isPassed ? "bg-green-400" : isNext ? "bg-orange-300" : "bg-gray-200"}`} />
+                          </div>
+                          <div className="flex items-center gap-2 text-xs py-0.5">
+                            <div className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 ${
+                              isPassed ? "bg-green-400" : isNext ? "bg-orange-400 ring-2 ring-orange-200" : "bg-gray-200"
+                            }`}>
+                              {isPassed
+                                ? <span className="text-white text-[8px] font-bold">✓</span>
+                                : <div className={`w-1.5 h-1.5 rounded-full ${isNext ? "bg-white animate-pulse" : "bg-gray-400"}`} />
+                              }
+                            </div>
+                            <span className={`truncate font-medium ${
+                              isPassed ? "text-gray-400 line-through" : isNext ? "text-orange-700 font-bold" : "text-gray-600"
+                            }`}>
+                              {villageName(stop)}
+                            </span>
+                            {isNext && <span className="ml-auto text-[9px] text-orange-500 font-bold shrink-0">NEXT</span>}
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                  {/* Connector to destination */}
+                  <div className="flex items-center gap-0 ml-[7px]">
+                    <div className={`w-0.5 h-2.5 ${passedStopCount >= intermediateStops.length ? "bg-green-400" : "bg-gray-200"}`} />
+                  </div>
+                  {/* Destination */}
+                  <div className="flex items-center gap-2 text-xs py-0.5">
+                    <div className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 ${
+                      busInfo.status === "arrived" ? "bg-blue-500" : "bg-red-400"
+                    }`}>
+                      <div className="w-1.5 h-1.5 rounded-full bg-white" />
+                    </div>
+                    <span className={`font-semibold truncate ${busInfo.status === "arrived" ? "text-blue-700" : "text-red-600"}`}>
+                      {villageName(to)}
+                    </span>
+                    {busInfo.status === "arrived" && <span className="ml-auto text-[9px] text-blue-500 font-bold shrink-0">✓</span>}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="border-t border-gray-100 pt-2 space-y-1 text-xs">
               <div className="flex items-center justify-between">
                 <span className="text-gray-500">{t("info.status")}</span>
                 <span className={`font-semibold flex items-center gap-1 ${statusColor}`}>
@@ -470,12 +583,6 @@ export default function MapTracker() {
               <div className="flex items-center justify-between">
                 <span className="text-gray-500">{t("info.speed")}</span>
                 <span className="font-semibold text-gray-800">{busInfo.speed} km/h</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-gray-500">{t("info.next_stop")}</span>
-                <span className="font-semibold text-gray-800 truncate max-w-[80px] text-right">
-                  {villageName(busInfo.to)}
-                </span>
               </div>
             </div>
           </div>
