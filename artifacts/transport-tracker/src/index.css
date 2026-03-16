@@ -72,9 +72,21 @@
   --radius: 1rem;
 }
 
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(1.3); }
+}
+
 @layer base {
   * {
     @apply border-border;
+  }
+  html, body, #root {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
   }
   body {
     @apply bg-background text-foreground antialiased font-sans selection:bg-primary/20 selection:text-primary;
