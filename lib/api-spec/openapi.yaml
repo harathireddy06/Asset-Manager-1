@@ -1,22 +1,28 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Telangana Bus Tracker API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: villages
+    description: Village data
+  - name: buses
+    description: Bus tracking
+  - name: routes
+    description: Route management
+  - name: notifications
+    description: Alerts and notifications
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +30,88 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /villages:
+    get:
+      operationId: getVillages
+      tags: [villages]
+      summary: Get list of all villages
+      responses:
+        "200":
+          description: List of villages
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VillagesResponse"
+  /bus-location:
+    get:
+      operationId: getBusLocation
+      tags: [buses]
+      summary: Get current bus GPS location
+      parameters:
+        - name: busId
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Bus location data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BusLocation"
+  /buses:
+    get:
+      operationId: getBuses
+      tags: [buses]
+      summary: Get all buses
+      responses:
+        "200":
+          description: List of buses
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BusesResponse"
+  /eta:
+    get:
+      operationId: getEta
+      tags: [routes]
+      summary: Get ETA for a route
+      parameters:
+        - name: from
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: to
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: busId
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ETA information
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EtaResponse"
+  /notifications:
+    get:
+      operationId: getNotifications
+      tags: [notifications]
+      summary: Get current notifications and alerts
+      responses:
+        "200":
+          description: List of notifications
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationsResponse"
 components:
   schemas:
     HealthStatus:
@@ -33,4 +121,117 @@ components:
           type: string
       required:
         - status
-
+    VillagesResponse:
+      type: object
+      properties:
+        villages:
+          type: array
+          items:
+            type: string
+      required:
+        - villages
+    BusLocation:
+      type: object
+      properties:
+        busId:
+          type: string
+        busNumber:
+          type: string
+        lat:
+          type: number
+        lng:
+          type: number
+        speed:
+          type: number
+        heading:
+          type: number
+        from:
+          type: string
+        to:
+          type: string
+        status:
+          type: string
+          enum: [on_time, delayed, arrived]
+        lastUpdated:
+          type: string
+      required:
+        - busId
+        - busNumber
+        - lat
+        - lng
+        - speed
+        - heading
+        - from
+        - to
+        - status
+        - lastUpdated
+    BusesResponse:
+      type: object
+      properties:
+        buses:
+          type: array
+          items:
+            $ref: "#/components/schemas/BusLocation"
+      required:
+        - buses
+    EtaResponse:
+      type: object
+      properties:
+        busNumber:
+          type: string
+        from:
+          type: string
+        to:
+          type: string
+        distanceKm:
+          type: number
+        etaMinutes:
+          type: number
+        etaText:
+          type: string
+        etaTextTelugu:
+          type: string
+        status:
+          type: string
+          enum: [on_time, delayed, arrived]
+      required:
+        - busNumber
+        - from
+        - to
+        - distanceKm
+        - etaMinutes
+        - etaText
+        - etaTextTelugu
+        - status
+    Notification:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum: [arriving, delayed, arrived, route_change]
+        message:
+          type: string
+        messageTelugu:
+          type: string
+        busNumber:
+          type: string
+        timestamp:
+          type: string
+      required:
+        - id
+        - type
+        - message
+        - messageTelugu
+        - busNumber
+        - timestamp
+    NotificationsResponse:
+      type: object
+      properties:
+        notifications:
+          type: array
+          items:
+            $ref: "#/components/schemas/Notification"
+      required:
+        - notifications

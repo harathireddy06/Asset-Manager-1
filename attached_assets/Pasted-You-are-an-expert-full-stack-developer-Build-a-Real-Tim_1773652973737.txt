@@ -1,0 +1,356 @@
+You are an expert full-stack developer. Build a Real-Time Public Transport Tracking Web Application for small cities and villages in Telangana.
+
+The system should allow villagers to track buses in real time, view estimated arrival time, and receive alerts and notifications.
+
+The interface must be very simple so even uneducated people can understand it.
+
+Technology Stack
+
+Frontend
+
+HTML
+
+TailwindCSS
+
+JavaScript
+
+Backend
+
+Python (Flask)
+
+Real-time communication
+
+Flask-SocketIO
+
+Database
+
+JSON files
+
+Maps
+
+Google Maps JavaScript API
+
+Voice assistant
+
+Web Speech API
+
+Core Features
+1 Language Switching
+
+The application must support two languages
+
+English
+
+Telugu
+
+Add a language toggle button on the top right.
+
+Example translations:
+
+English | Telugu
+From | నుండి
+To | కు
+Track Bus | బస్ ట్రాక్ చేయండి
+Bus Location | బస్ స్థానం
+Estimated Time | అంచనా సమయం
+
+When user switches language, the whole UI should update.
+
+2 Route Selection
+
+Create two input boxes:
+
+FROM
+TO
+
+Users should be able to select village names from dropdown suggestions.
+
+Villages should come from a dataset of 100 villages in Telangana.
+
+Telangana Villages Dataset (villages.json)
+
+Create a JSON file called villages.json containing the following villages:
+
+[
+"Suryapet",
+"Kodad",
+"Huzurnagar",
+"Miryalaguda",
+"Nalgonda",
+"Choutuppal",
+"Bhongir",
+"Devarakonda",
+"Nagarjuna Sagar",
+"Chivvemla",
+"Tungaturthi",
+"Nakrekal",
+"Nereducherla",
+"Garidepally",
+"Penpahad",
+"Mothkur",
+"Alair",
+"Atmakur",
+"Bibinagar",
+"Valigonda",
+"Ramannapet",
+"Pochampally",
+"Mothey",
+"Munagala",
+"Mellacheruvu",
+"Mattampally",
+"Palakeedu",
+"Thipparthi",
+"Damaracherla",
+"Anumula",
+"Nidamanur",
+"Chandur",
+"Kattangur",
+"Narayanpur",
+"Munugode",
+"Chityal",
+"Thorrur",
+"Mahabubabad",
+"Kesamudram",
+"Dornakal",
+"Maripeda",
+"Narsimhulapet",
+"Kuravi",
+"Bayyaram",
+"Gudur",
+"Mulugu",
+"Eturnagaram",
+"Mangapet",
+"Venkatapuram",
+"Govindaraopet",
+"Tadvai",
+"Parkal",
+"Atmakur Warangal",
+"Shayampet",
+"Geesugonda",
+"Sangem",
+"Hasanparthy",
+"Dharmasagar",
+"Kazipet",
+"Hanamkonda",
+"Warangal",
+"Jangaon",
+"Palakurthi",
+"Raghunathpally",
+"Zaffergadh",
+"Bachannapet",
+"Devaruppula",
+"Narmetta",
+"Ghanpur Station",
+"Chilpur",
+"Kadipikonda",
+"Hunter Road",
+"Balasamudram",
+"Kothagudem",
+"Yellandu",
+"Manuguru",
+"Paloncha",
+"Bhadrachalam",
+"Aswaraopeta",
+"Dammapeta",
+"Burgampahad",
+"Chandrugonda",
+"Dummugudem",
+"Karepalli",
+"Sathupalli",
+"Vemsoor",
+"Madhira",
+"Wyra",
+"Thallada",
+"Nelakondapally",
+"Kusumanchi",
+"Khammam",
+"Bonakal",
+"Enkoor",
+"Julurupadu",
+"Penuballi",
+"Kallur",
+"Tekulapally",
+"Illandu"
+]
+3 Google Maps Integration
+
+Embed Google Maps API.
+
+Map features:
+
+Zoom
+
+Pan
+
+Bus marker
+
+Route path
+
+Village markers
+
+The bus marker should look like a bus icon.
+
+4 Real-Time GPS Tracking
+
+Simulate live GPS tracking.
+
+The bus marker should move every 2 seconds.
+
+Example JavaScript:
+
+setInterval(() => {
+    fetch('/bus-location')
+    .then(res => res.json())
+    .then(data => {
+        updateBusMarker(data.lat, data.lng);
+    });
+}, 2000);
+
+Backend should generate new GPS coordinates every 2 seconds.
+
+5 Estimated Time of Arrival (ETA)
+
+After user selects From → To, show:
+
+Bus Number
+Distance Remaining
+Estimated Arrival Time
+
+Example UI:
+
+Bus Number: TS05-2345
+Distance Remaining: 12 km
+Estimated Arrival: 18 minutes
+
+ETA formula:
+
+ETA = distance / average bus speed
+
+Use average speed = 40 km/h.
+
+6 Voice Assistant
+
+Add a voice assistant.
+
+Users can speak commands such as:
+
+"Track my bus"
+"Bus from Suryapet to Kodad"
+"When will the bus arrive"
+
+Use:
+
+Web Speech API
+
+Speech Recognition
+
+Text to Speech
+
+Assistant responses should support Telugu voice output.
+
+Example Telugu response:
+
+"మీ బస్ 8 నిమిషాల్లో వస్తుంది"
+
+7 Notifications and Alerts
+
+Show notifications like:
+
+Bus arriving in 5 minutes
+
+Bus delayed
+
+Bus reached destination
+
+Route change alert
+
+Use popup alerts and browser notifications.
+
+8 Simple Interface Design
+
+Design UI for rural users.
+
+Rules:
+
+Large buttons
+
+Big fonts
+
+Minimal text
+
+Icons instead of complex words
+
+Voice guidance
+
+Main pages:
+
+Home Page
+Route Selection Page
+Live Tracking Page
+Notifications Page
+
+9 Backend Python (Flask)
+
+Backend should handle:
+
+villages dataset
+
+bus GPS location
+
+ETA calculation
+
+alerts
+
+routes
+
+Create APIs:
+
+/villages
+/bus-location
+/eta
+/notifications
+
+Use Flask-SocketIO for real-time updates.
+
+10 Project Folder Structure
+transport-tracker
+
+frontend
+│
+├── index.html
+├── tracking.html
+├── app.js
+├── language.js
+├── voice.js
+├── map.js
+│
+backend
+│
+├── app.py
+├── gps_simulator.py
+├── eta_calculator.py
+├── routes.py
+│
+database
+│
+├── villages.json
+├── buses.json
+Final Goal
+
+Build a Google Maps-like bus tracking system specifically designed for Telangana villages.
+
+The system should include:
+
+Real-time GPS bus tracking
+
+ETA prediction
+
+Telugu + English language support
+
+Voice assistant
+
+Notifications and alerts
+
+Simple UI for rural users
+
+The bus marker should move smoothly every 2 seconds like real GPS tracking.

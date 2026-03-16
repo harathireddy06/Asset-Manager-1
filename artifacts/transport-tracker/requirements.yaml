@@ -1,0 +1,21 @@
+packages:
+  "react-leaflet": "React components for Leaflet maps"
+  "leaflet": "Interactive maps library"
+  "@types/leaflet": "Types for leaflet"
+  "framer-motion": "Animations for the UI"
+  "lucide-react": "Icons"
+  "clsx": "Utility for constructing className strings conditionally"
+  "tailwind-merge": "Utility for merging tailwind classes"
+
+images:
+  - path: "artifacts/transport-tracker/public/images/hero-bg.png"
+    description: "Warm glowing sunset over a rural Indian landscape with a road, stylized in flat vector art, vibrant orange and teal colors"
+    aspect_ratio: "16:9"
+  - path: "artifacts/transport-tracker/public/images/pattern.png"
+    description: "Subtle traditional Indian geometric pattern in pale orange, transparent background"
+    aspect_ratio: "1:1"
+
+notes:
+  - "Assuming Web Speech API is supported in the target browsers for voice search and TTS."
+  - "Using Leaflet with OpenStreetMap for free map tiles without an API key."
+  - "Importing API hooks from @workspace/api-client-react as specified."
