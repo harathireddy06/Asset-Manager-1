@@ -1,0 +1,104 @@
+Tech Stack
+Frontend: HTML, TailwindCSS, JavaScript
+Backend: Python (Flask or FastAPI)
+Map: Leaflet.js with OpenStreetMap tiles
+Requirements
+1️⃣ Full Screen Responsive Layout
+The website must occupy 100% width and 100% height of the screen.
+No blank margins.
+Map should automatically expand to fill the entire screen.
+Use TailwindCSS responsive design.
+The layout must adjust to mobile, tablet, and desktop screens.
+2️⃣ Google-Maps-Like Map Interface
+The map must look and behave like Google Maps UI.
+Use Leaflet.js map with OpenStreetMap tiles.
+Enable:
+Zoom in/out controls
+Smooth map panning
+Dragging the map
+Marker animations
+The map must open fully when the website loads.
+3️⃣ Real-Time Bus Tracking
+A bus marker icon should be visible on the map.
+The marker must move slowly like a GPS tracker.
+Update the bus location every 2 seconds using simulated coordinates from backend.
+Movement should be smooth, not jumping.
+The path should show the route line.
+Example update logic:
+Copy code
+
+Update bus location every 2 seconds
+Move marker smoothly to next coordinate
+Animate movement
+4️⃣ Clear Tracking Visibility
+The bus marker should:
+Be large and clearly visible
+Use a bus icon
+Show live status popup
+Popup example:
+Copy code
+
+Bus ID: TS01-1234
+Status: Running
+Speed: 42 km/h
+Next Stop: Village 12
+5️⃣ Fully Functional Buttons
+Add working buttons:
+Start Tracking
+Stop Tracking
+Center on Bus
+Show Route
+Reset Map
+All buttons must perform real actions using JavaScript.
+6️⃣ Proper Drag Controls
+The map must support:
+Drag to move map
+Scroll zoom
+Touch gestures
+Button panel should be draggable using JavaScript.
+7️⃣ Backend API
+Create a Python backend that:
+Stores bus location data
+Sends updated coordinates every 2 seconds
+Provides API endpoint:
+Copy code
+
+/api/bus-location
+Example JSON response:
+Copy code
+
+{
+ "lat": 17.385,
+ "lng": 78.486,
+ "speed": 40,
+ "bus_id": "TS01-1234"
+}
+8️⃣ File Structure
+Copy code
+
+bus-tracker
+│
+├── backend
+│   └── app.py
+│
+├── frontend
+│   ├── index.html
+│   ├── script.js
+│   └── style.css
+│
+└── data
+    └── bus_route.json
+9️⃣ UI Design
+Use TailwindCSS modern UI:
+Floating control panel
+Smooth transitions
+Rounded buttons
+Clean minimal map UI
+10️⃣ Final Result
+The final website should:
+✔ Occupy entire screen
+✔ Show Google-maps-style interface
+✔ Have smooth real-time bus tracking
+✔ Update location every 2 seconds
+✔ Support dragging, zooming, panning
+✔ Have fully functional buttons
