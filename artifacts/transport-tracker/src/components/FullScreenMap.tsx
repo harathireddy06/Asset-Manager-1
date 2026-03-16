@@ -10,7 +10,6 @@ import {
 } from "react-leaflet";
 import L from "leaflet";
 import type { Map as LeafletMap } from "leaflet";
-import { BusLocation } from "@workspace/api-client-react/src/generated/api.schemas";
 import { VILLAGE_NAMES_TE, type Language } from "@/contexts/LanguageContext";
 
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -69,9 +68,18 @@ function MapReadyHandler({ onMapReady }: { onMapReady: (map: LeafletMap) => void
   return null;
 }
 
+interface BusInfo {
+  busNumber: string;
+  busId: string;
+  speed: number;
+  status: "on_time" | "delayed" | "arrived";
+  from: string;
+  to: string;
+}
+
 interface FullScreenMapProps {
-  busLocation?: BusLocation | null;
   displayPos: [number, number] | null;
+  busInfo: BusInfo | null;
   busHistory: [number, number][];
   showRoute: boolean;
   fromCoord?: [number, number];
@@ -83,8 +91,8 @@ interface FullScreenMapProps {
 }
 
 export default function FullScreenMap({
-  busLocation,
   displayPos,
+  busInfo,
   busHistory,
   showRoute,
   fromCoord,
@@ -98,32 +106,28 @@ export default function FullScreenMap({
 
   const vn = (name: string) => lang === "te" ? (VILLAGE_NAMES_TE[name] || name) : name;
 
-  const routeLine: [number, number][] = fromCoord && toCoord
-    ? [fromCoord, ...(displayPos ? [displayPos] : []), toCoord]
-    : [];
+  const routeLine: [number, number][] = fromCoord && toCoord ? [fromCoord, toCoord] : [];
 
   const statusLabel =
-    busLocation?.status === "on_time"
+    busInfo?.status === "on_time"
       ? (lang === "te" ? "నడుస్తోంది ✓" : "Running ✓")
-      : busLocation?.status === "delayed"
+      : busInfo?.status === "delayed"
       ? (lang === "te" ? "ఆలస్యం ⚠" : "Delayed ⚠")
       : (lang === "te" ? "చేరుకుంది ✓" : "Arrived ✓");
 
   const statusColor =
-    busLocation?.status === "on_time" ? "#22c55e"
-    : busLocation?.status === "delayed" ? "#ef4444"
+    busInfo?.status === "on_time" ? "#22c55e"
+    : busInfo?.status === "delayed" ? "#ef4444"
     : "#3b82f6";
 
   const labels = {
-    busId:    lang === "te" ? "బస్ ID"      : "Bus ID",
-    status:   lang === "te" ? "స్థితి"       : "Status",
-    speed:    lang === "te" ? "వేగం"        : "Speed",
+    busId:    lang === "te" ? "బస్ ID"       : "Bus ID",
+    status:   lang === "te" ? "స్థితి"        : "Status",
+    speed:    lang === "te" ? "వేగం"         : "Speed",
     nextStop: lang === "te" ? "తదుపరి స్టాప్" : "Next Stop",
-    start:    lang === "te" ? "🟢 ప్రారంభం"  : "🟢 Start",
-    dest:     lang === "te" ? "🔴 గమ్యం"     : "🔴 Destination",
+    start:    lang === "te" ? "🟢 ప్రారంభం"   : "🟢 Start",
+    dest:     lang === "te" ? "🔴 గమ్యం"      : "🔴 Destination",
   };
-
-  const busPos = displayPos ?? (busLocation ? [busLocation.lat, busLocation.lng] as [number, number] : null);
 
   return (
     <MapContainer
@@ -143,14 +147,17 @@ export default function FullScreenMap({
 
       <ZoomControl position="bottomright" />
 
-      {showRoute && routeLine.length >= 2 && (
-        <Polyline positions={routeLine} color="#3b82f6" weight={4} opacity={0.5} dashArray="12 8" />
+      {/* Straight planned route line (from → to) */}
+      {showRoute && routeLine.length === 2 && (
+        <Polyline positions={routeLine} color="#3b82f6" weight={4} opacity={0.45} dashArray="14 8" />
       )}
 
+      {/* Travelled path trail */}
       {showRoute && busHistory.length >= 2 && (
-        <Polyline positions={busHistory} color="#f97316" weight={5} opacity={0.85} />
+        <Polyline positions={busHistory} color="#f97316" weight={5} opacity={0.9} />
       )}
 
+      {/* From marker */}
       {fromCoord && (
         <Marker position={fromCoord} icon={fromIcon}>
           <Popup>
@@ -161,6 +168,7 @@ export default function FullScreenMap({
         </Marker>
       )}
 
+      {/* To marker */}
       {toCoord && (
         <Marker position={toCoord} icon={toIcon}>
           <Popup>
@@ -171,19 +179,20 @@ export default function FullScreenMap({
         </Marker>
       )}
 
-      {busPos && busLocation && (
-        <Marker position={busPos} icon={busIcon}>
+      {/* Bus marker - only shows when we have an animated position */}
+      {displayPos && busInfo && (
+        <Marker position={displayPos} icon={busIcon}>
           <Popup autoClose={false}>
             <div style={{ fontFamily: "system-ui", minWidth: 165, padding: "4px 2px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
                 <span style={{ fontSize: 20 }}>🚌</span>
-                <strong style={{ fontSize: 15, color: "#1e293b" }}>Bus {busLocation.busNumber}</strong>
+                <strong style={{ fontSize: 15, color: "#1e293b" }}>Bus {busInfo.busNumber}</strong>
               </div>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
                 <tbody>
                   <tr>
                     <td style={{ color: "#64748b", paddingBottom: 4 }}>{labels.busId}</td>
-                    <td style={{ fontWeight: 600, color: "#1e293b", textAlign: "right", paddingBottom: 4 }}>{busLocation.busId}</td>
+                    <td style={{ fontWeight: 600, color: "#1e293b", textAlign: "right", paddingBottom: 4 }}>{busInfo.busId}</td>
                   </tr>
                   <tr>
                     <td style={{ color: "#64748b", paddingBottom: 4 }}>{labels.status}</td>
@@ -191,11 +200,11 @@ export default function FullScreenMap({
                   </tr>
                   <tr>
                     <td style={{ color: "#64748b", paddingBottom: 4 }}>{labels.speed}</td>
-                    <td style={{ fontWeight: 600, color: "#1e293b", textAlign: "right", paddingBottom: 4 }}>{busLocation.speed} km/h</td>
+                    <td style={{ fontWeight: 600, color: "#1e293b", textAlign: "right", paddingBottom: 4 }}>{busInfo.speed} km/h</td>
                   </tr>
                   <tr>
                     <td style={{ color: "#64748b" }}>{labels.nextStop}</td>
-                    <td style={{ fontWeight: 600, color: "#1e293b", textAlign: "right" }}>{vn(busLocation.to)}</td>
+                    <td style={{ fontWeight: 600, color: "#1e293b", textAlign: "right" }}>{vn(busInfo.to)}</td>
                   </tr>
                 </tbody>
               </table>
