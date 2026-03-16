@@ -31,7 +31,9 @@ const VILLAGE_COORDS: Record<string, [number, number]> = {
   "Paloncha":        [17.5973, 80.7024],
 };
 
-const SIMULATION_DURATION_MS = 5 * 60 * 1000;
+const UPDATE_INTERVAL_MS = 60_000;
+const SPEED_KMH = 40;
+const ANIM_DURATION_MS = 8_000;
 
 function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371;
@@ -75,7 +77,7 @@ export default function MapTracker() {
   const [busInfo, setBusInfo] = useState<SimBusInfo | null>(null);
 
   const animFrameRef = useRef<number | null>(null);
-  const trackStartRef = useRef<number>(0);
+  const currentPosRef = useRef<[number, number] | null>(null);
   const lastHistoryRef = useRef<[number, number] | null>(null);
   const arrivedRef = useRef(false);
 
@@ -98,47 +100,61 @@ export default function MapTracker() {
     if (!isTracking || !fromCoord || !toCoord) return;
 
     arrivedRef.current = false;
-    trackStartRef.current = performance.now();
     lastHistoryRef.current = null;
-    setBusHistory([fromCoord]);
 
     const distKm = haversineKm(fromCoord[0], fromCoord[1], toCoord[0], toCoord[1]);
-    const simSpeedKmh = Math.round((distKm / (SIMULATION_DURATION_MS / 3600000)) * 10) / 10;
+    const totalMinutes = Math.max(1, Math.ceil((distKm / SPEED_KMH) * 60));
+    let step = 0;
 
     setBusInfo({
       busNumber: "TS01-1234",
       busId: "bus-sim-1",
-      speed: Math.min(Math.round(simSpeedKmh), 80),
+      speed: Math.round(SPEED_KMH + (Math.random() * 10 - 5)),
       status: "on_time",
       from,
       to,
     });
 
-    if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+    currentPosRef.current = fromCoord;
+    setDisplayPos(fromCoord);
+    setBusHistory([fromCoord]);
 
-    function animate(now: number) {
-      const elapsed = now - trackStartRef.current;
-      const progress = Math.min(elapsed / SIMULATION_DURATION_MS, 1);
-
-      const lat = fromCoord![0] + (toCoord![0] - fromCoord![0]) * progress;
-      const lng = fromCoord![1] + (toCoord![1] - fromCoord![1]) * progress;
-      const pos: [number, number] = [lat, lng];
-
-      setDisplayPos(pos);
-
-      const last = lastHistoryRef.current;
-      if (!last || Math.abs(last[0] - lat) > 0.002 || Math.abs(last[1] - lng) > 0.002) {
-        setBusHistory(prev => [...prev.slice(-200), pos]);
-        lastHistoryRef.current = pos;
+    function animateTo(fromPos: [number, number], toPos: [number, number]) {
+      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+      const start = performance.now();
+      function frame(now: number) {
+        const t = Math.min((now - start) / ANIM_DURATION_MS, 1);
+        const ease = t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+        const lat = fromPos[0] + (toPos[0] - fromPos[0]) * ease;
+        const lng = fromPos[1] + (toPos[1] - fromPos[1]) * ease;
+        const pos: [number, number] = [lat, lng];
+        currentPosRef.current = pos;
+        setDisplayPos(pos);
+        if (t < 1) animFrameRef.current = requestAnimationFrame(frame);
       }
+      animFrameRef.current = requestAnimationFrame(frame);
+    }
 
+    function tick() {
+      step += 1;
+      const progress = Math.min(step / totalMinutes, 1);
+      const newLat = fromCoord![0] + (toCoord![0] - fromCoord![0]) * progress;
+      const newLng = fromCoord![1] + (toCoord![1] - fromCoord![1]) * progress;
+      const newPos: [number, number] = [newLat, newLng];
+
+      animateTo(currentPosRef.current ?? fromCoord!, newPos);
+
+      setBusHistory(prev => [...prev.slice(-200), newPos]);
+      lastHistoryRef.current = newPos;
+
+      const isNearEnd = progress >= 0.95;
       setBusInfo(prev => prev ? {
         ...prev,
-        speed: progress > 0.9 ? Math.max(20, Math.round(prev.speed * 0.6)) : prev.speed,
-        status: progress > 0.95 ? "arrived" : "on_time",
+        speed: isNearEnd ? Math.max(20, Math.round(prev.speed * 0.6)) : Math.round(SPEED_KMH + (Math.random() * 10 - 5)),
+        status: isNearEnd ? "arrived" : "on_time",
       } : prev);
 
-      if (progress >= 0.95 && !arrivedRef.current) {
+      if (isNearEnd && !arrivedRef.current) {
         arrivedRef.current = true;
         const msg = lang === "te"
           ? "మీరు స్టాప్‌కు చేరుకున్నారు."
@@ -148,17 +164,17 @@ export default function MapTracker() {
         setTimeout(() => setStopAlert(null), 6000);
       }
 
-      if (progress < 1) {
-        animFrameRef.current = requestAnimationFrame(animate);
-      } else {
-        setDisplayPos(toCoord!);
+      if (progress >= 1) {
+        clearInterval(intervalId);
+        animateTo(newPos, toCoord!);
         setIsTracking(false);
       }
     }
 
-    animFrameRef.current = requestAnimationFrame(animate);
+    const intervalId = setInterval(tick, UPDATE_INTERVAL_MS);
 
     return () => {
+      clearInterval(intervalId);
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     };
   }, [isTracking]);
@@ -200,6 +216,7 @@ export default function MapTracker() {
     setFrom("");
     setTo("");
     arrivedRef.current = false;
+    currentPosRef.current = null;
     if (mapInstance) mapInstance.setView([17.385, 78.4867], 8, { animate: true });
   }, [mapInstance]);
 
