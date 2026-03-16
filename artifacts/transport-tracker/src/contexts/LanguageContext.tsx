@@ -24,6 +24,8 @@ const translations: Record<string, { en: string; te: string }> = {
   "info.next_stop":         { en: "Next Stop",                  te: "తదుపరి స్టాప్" },
   "info.eta":               { en: "ETA",                        te: "అంచనా సమయం" },
   "info.remaining":         { en: "Remaining",                  te: "మిగిలింది" },
+  "info.stops":             { en: "Stops",                      te: "స్టాప్‌లు" },
+  "info.direct":            { en: "Direct route",               te: "నేరుగా మార్గం" },
   "status.on_time":         { en: "Running",                    te: "నడుస్తోంది" },
   "status.delayed":         { en: "Delayed",                    te: "ఆలస్యం" },
   "status.arrived":         { en: "Arrived",                    te: "చేరుకుంది" },
