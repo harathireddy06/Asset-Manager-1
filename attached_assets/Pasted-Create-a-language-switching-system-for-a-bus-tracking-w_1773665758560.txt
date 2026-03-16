@@ -1,0 +1,104 @@
+Create a language switching system for a bus tracking website named TrackIt.
+Requirements:
+Display the website title "TrackIt" at the top of the page.
+Add a language toggle button in the header.
+Supported languages:
+English
+Telugu
+When switching language:
+All buttons, labels, alerts, and UI text must change instantly.
+Bus stop names and village names must appear in Telugu when Telugu mode is selected.
+The language switch should not reload the page.
+Default language must be English.
+Example translation structure:
+Copy code
+
+const translations = {
+  en: {
+    start: "Start Tracking",
+    stop: "Stop Tracking",
+    nextStop: "Next Stop",
+    language: "Language"
+  },
+  te: {
+    start: "ట్రాకింగ్ ప్రారంభించు",
+    stop: "ట్రాకింగ్ ఆపు",
+    nextStop: "తదుపరి స్టాప్",
+    language: "భాష"
+  }
+}
+2️⃣ Prompt – Stop Arrival Voice Alert for TrackIt
+Add a voice alert system to the TrackIt bus tracking website.
+Requirements:
+When the bus reaches a bus stop location, trigger a voice message alert.
+Use JavaScript Speech Synthesis API.
+Detect if the bus is within 20–30 meters of the stop.
+Voice message examples:
+English:
+Copy code
+
+"You have reached the stop."
+Telugu:
+Copy code
+
+"మీరు స్టాప్‌కు చేరుకున్నారు."
+Additional behavior:
+Show a popup notification when the stop is reached.
+The alert must trigger only once per stop.
+The system should continue tracking to the next stop.
+Example popup:
+Copy code
+
+Stop Reached
+Village: Rampur
+3️⃣ Prompt – Voice Assistant for TrackIt
+Add a voice assistant feature to the TrackIt bus tracking website.
+Requirements:
+Add a microphone button on the screen.
+Use Web Speech API (SpeechRecognition).
+When the user clicks the microphone, the assistant listens for commands.
+Supported commands:
+English commands:
+"Start tracking"
+"Stop tracking"
+"Center bus"
+"Show route"
+"Change language to Telugu"
+"Change language to English"
+Telugu commands:
+"ట్రాకింగ్ ప్రారంభించు"
+"ట్రాకింగ్ ఆపు"
+"బస్సు చూపించు"
+The assistant should:
+Convert speech → text
+Execute the command
+Display confirmation like:
+Copy code
+
+Voice Assistant: Tracking Started
+4️⃣ Prompt – Bus Tracking Update Every 1 Minute for TrackIt
+Implement real-time bus tracking for the TrackIt website.
+Requirements:
+The bus marker should move smoothly like GPS tracking.
+The bus location must update every 1 minute (60 seconds).
+Movement must be smooth and animated, not jumping suddenly.
+The tracking path should be visible.
+Tracking logic:
+Copy code
+
+Fetch new bus coordinates from backend every 60 seconds
+Update marker position smoothly
+Update popup information
+Bus popup example:
+Copy code
+
+Bus ID: TS01-1234
+Speed: 38 km/h
+Next Stop: Village 12
+✅ Final website requirements for TrackIt:
+Full-screen map interface
+Real-time bus tracking
+Language switching (English / Telugu)
+Voice assistant
+Stop arrival voice alerts
+Smooth tracking updates every 1 minute
