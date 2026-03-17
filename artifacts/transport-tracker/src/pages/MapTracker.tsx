@@ -284,38 +284,117 @@ export default function MapTracker() {
     if (mapInstance) mapInstance.setView([17.385, 78.4867], 8, { animate: true });
   }, [mapInstance]);
 
+  const handleAnnounceEta = useCallback(() => {
+    if (!eta) { speak(lang === "te" ? "ట్రాకింగ్ ప్రారంభమైంది లేదు" : "No active tracking", lang); return; }
+    const msg = lang === "te" ? `అంచనా సమయం ${eta}` : `Estimated arrival in ${eta}`;
+    speak(msg, lang);
+    showVoiceFeedback("voice.cmd.eta");
+  }, [eta, lang, showVoiceFeedback]);
+
   const startVoiceAssistant = useCallback(() => {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SR) { showVoiceFeedback("voice.cmd.unknown"); return; }
+    if (!SR) { showVoiceFeedback("voice.cmd.error"); return; }
+
     const rec = new SR();
-    rec.lang = lang === "te" ? "te-IN" : "en-IN";
+    rec.lang = "en-IN";
     rec.interimResults = false;
-    rec.maxAlternatives = 3;
+    rec.maxAlternatives = 5;
     rec.onstart = () => setIsListening(true);
     rec.onend = () => setIsListening(false);
-    rec.onerror = () => setIsListening(false);
+    rec.onerror = () => { setIsListening(false); showVoiceFeedback("voice.cmd.error"); };
+
     rec.onresult = (e: any) => {
-      const text = Array.from({ length: e.results[0].length }, (_, i) =>
-        e.results[0][i].transcript.toLowerCase().trim()
-      ).join(" ");
-      if (text.includes("start") || text.includes("ప్రారంభించు")) {
-        handleStartTracking(); showVoiceFeedback("voice.cmd.start");
-      } else if (text.includes("stop") || text.includes("ఆపు")) {
-        handleStopTracking(); showVoiceFeedback("voice.cmd.stop");
-      } else if (text.includes("center") || text.includes("చూపించు") || text.includes("బస్సు")) {
-        handleCenterOnBus(); showVoiceFeedback("voice.cmd.center");
-      } else if (text.includes("route") || text.includes("మార్గం")) {
-        handleShowRoute(); showVoiceFeedback("voice.cmd.route");
-      } else if (text.includes("telugu") || text.includes("తెలుగు")) {
+      const alternatives: string[] = Array.from(
+        { length: e.results[0].length },
+        (_, i) => e.results[0][i].transcript.toLowerCase().trim()
+      );
+      const combined = alternatives.join(" ");
+
+      const villages = Object.keys(VILLAGE_COORDS);
+
+      const findVillage = (text: string) =>
+        villages.find(v => text.includes(v.toLowerCase()));
+
+      const fromToPattern = alternatives.find(t => /from .+ to .+/i.test(t));
+      if (fromToPattern) {
+        const m = fromToPattern.match(/from (.+?) to (.+)/i);
+        if (m) {
+          const fv = findVillage(m[1]);
+          const tv = findVillage(m[2]);
+          if (fv && tv && fv !== tv) {
+            setFrom(fv);
+            setTo(tv);
+            speak(`Route set from ${fv} to ${tv}`, lang);
+            showVoiceFeedback("voice.cmd.route_set");
+            return;
+          }
+        }
+      }
+
+      const fromPattern = alternatives.find(t => /\bfrom\b/.test(t));
+      if (fromPattern) {
+        const after = fromPattern.replace(/.*\bfrom\b/, "");
+        const fv = findVillage(after);
+        if (fv) {
+          setFrom(fv);
+          speak(`Starting from ${fv}`, lang);
+          showVoiceFeedback("voice.cmd.from_set");
+          return;
+        }
+      }
+
+      const toPattern = alternatives.find(t => /\bto\b/.test(t));
+      if (toPattern) {
+        const after = toPattern.replace(/.*\bto\b/, "");
+        const tv = findVillage(after);
+        if (tv) {
+          setTo(tv);
+          speak(`Destination set to ${tv}`, lang);
+          showVoiceFeedback("voice.cmd.to_set");
+          return;
+        }
+      }
+
+      const mentionedVillages = villages.filter(v =>
+        alternatives.some(t => t.includes(v.toLowerCase()))
+      );
+      if (mentionedVillages.length >= 2) {
+        setFrom(mentionedVillages[0]);
+        setTo(mentionedVillages[1]);
+        speak(`Route set from ${mentionedVillages[0]} to ${mentionedVillages[1]}`, lang);
+        showVoiceFeedback("voice.cmd.route_set");
+        return;
+      }
+      if (mentionedVillages.length === 1) {
+        if (!from) { setFrom(mentionedVillages[0]); showVoiceFeedback("voice.cmd.from_set"); }
+        else { setTo(mentionedVillages[0]); showVoiceFeedback("voice.cmd.to_set"); }
+        speak(mentionedVillages[0], lang);
+        return;
+      }
+
+      if (/\b(start|track|begin|go|ప్రారంభించు)\b/.test(combined)) {
+        handleStartTracking(); speak("Tracking started", lang); showVoiceFeedback("voice.cmd.start");
+      } else if (/\b(stop|pause|cancel|ఆపు)\b/.test(combined)) {
+        handleStopTracking(); speak("Tracking stopped", lang); showVoiceFeedback("voice.cmd.stop");
+      } else if (/\b(eta|time|arrival|how long|when)\b/.test(combined)) {
+        handleAnnounceEta();
+      } else if (/\b(center|find|locate|where|bus)\b/.test(combined)) {
+        handleCenterOnBus(); speak("Centering on bus", lang); showVoiceFeedback("voice.cmd.center");
+      } else if (/\b(route|path|show|hide)\b/.test(combined)) {
+        handleShowRoute(); speak("Route toggled", lang); showVoiceFeedback("voice.cmd.route");
+      } else if (/\b(reset|clear|restart)\b/.test(combined)) {
+        handleReset(); speak("Map reset", lang); showVoiceFeedback("voice.cmd.reset");
+      } else if (/\b(telugu)\b/.test(combined)) {
         setLang("te"); showVoiceFeedback("voice.cmd.lang_te");
-      } else if (text.includes("english") || text.includes("ఇంగ్లీష్")) {
+      } else if (/\b(english)\b/.test(combined)) {
         setLang("en"); showVoiceFeedback("voice.cmd.lang_en");
       } else {
+        speak("Say: start, stop, eta, reset, or a village name", lang);
         showVoiceFeedback("voice.cmd.unknown");
       }
     };
     rec.start();
-  }, [lang, handleStartTracking, handleStopTracking, handleCenterOnBus, handleShowRoute, showVoiceFeedback, setLang]);
+  }, [lang, from, handleStartTracking, handleStopTracking, handleCenterOnBus, handleShowRoute, handleAnnounceEta, handleReset, showVoiceFeedback, setLang, setFrom, setTo]);
 
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     const panel = panelRef.current;
