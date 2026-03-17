@@ -405,24 +405,110 @@ export default function MapTracker() {
         speak(villageName(allMentioned[0]), lang); return;
       }
 
-      if (/\b(start|track|begin|go)\b/.test(combined) || alternatives.some(t => t.includes("ప్రారంభించు") || t.includes("ట్రాక్"))) {
-        handleStartTracking(); speak(lang === "te" ? "ట్రాకింగ్ ప్రారంభమైంది" : "Tracking started", lang); showVoiceFeedback("voice.cmd.start");
-      } else if (/\b(stop|pause|cancel)\b/.test(combined) || alternatives.some(t => t.includes("ఆపు") || t.includes("ఆపండి"))) {
-        handleStopTracking(); speak(lang === "te" ? "ట్రాకింగ్ ఆపారు" : "Tracking stopped", lang); showVoiceFeedback("voice.cmd.stop");
-      } else if (/\b(eta|time|arrival|how long|when)\b/.test(combined) || alternatives.some(t => t.includes("అంచనా") || t.includes("సమయం") || t.includes("ఎంత సేపు"))) {
+      const te = (words: string[]) => words.some(w => alternatives.some(t => t.includes(w)));
+
+      const isStartCmd =
+        /\b(start|track|begin|go)\b/.test(combined) ||
+        te(["ప్రారంభించు","మొదలు పెట్టు","మొదలు","వెళ్ళు","ట్రాక్ చేయి",
+            "ట్రాక్","నడిపించు","సరే మొదలు","ముందుకు","మొదలెట్టు"]);
+
+      const isStopCmd =
+        /\b(stop|pause|cancel)\b/.test(combined) ||
+        te(["ఆపు","ఆపండి","చాలు","వద్దు","బంద్ చేయి","ఆపి పెట్టు","నిలిపి వేయి",
+            "నిలిపి","ఇక వద్దు","చాల్లే","ఆగు","ఆగండి"]);
+
+      const isEtaCmd =
+        /\b(eta|arrival|how long|when)\b/.test(combined) ||
+        te(["ఎప్పుడొస్తుంది","ఎప్పుడు వస్తుంది","ఇంకా ఎంత సేపు","ఎంత సేపు","ఎంత టైం",
+            "టైం చెప్పు","ఎంత దూరం","ఎంత దూరముంది","ఇంకా ఎంత","అంచనా","సమయం",
+            "ఎప్పుడు","బస్సు ఎప్పుడు","వేళ","ఎంత వేళకి","వస్తుందా"]);
+
+      const isCenterCmd =
+        /\b(center|find|locate)\b/.test(combined) ||
+        te(["బస్సు ఎక్కడ","ఎక్కడుంది","బస్సు ఉంది","కనుగొను","ఏది","నాకు చూపించు",
+            "ఎక్కడ ఉంది","ఎక్కడున్నది","బస్సు ఏది","బస్సు చూపించు"]);
+
+      const isRouteCmd =
+        /\b(route|path)\b/.test(combined) ||
+        te(["మార్గం చూపించు","దారి చూపించు","దారి","ఏ దారి","రూట్","మార్గం",
+            "దారిలో","చూపు","చూపించు"]);
+
+      const isResetCmd =
+        /\b(reset|clear|restart)\b/.test(combined) ||
+        te(["మళ్ళీ మొదలు పెట్టు","మళ్ళీ పెట్టు","రీసెట్","క్లియర్","తిరిగి మొదలు",
+            "తిరిగి","అన్నీ తీసేయి","మళ్ళీ","క్రొత్తగా"]);
+
+      const isDestCmd =
+        alternatives.some(t =>
+          te(["కు వెళ్ళాలి","కి వెళ్ళాలి","కు పోవాలి","కి పోవాలి",
+              "వెళ్ళాలనుకుంటున్నాను","కు తీసుకెళ్ళు"]) &&
+          findVillage(t) !== undefined
+        );
+
+      const isFromBusCmd =
+        alternatives.some(t =>
+          (t.includes("నుండి వచ్చే బస్సు") || t.includes("నుంచి వచ్చే బస్సు") ||
+           t.includes("నుండి బస్సు") || t.includes("నుంచి బస్సు")) &&
+          findVillage(t) !== undefined
+        );
+
+      if (isDestCmd) {
+        const destText = alternatives.find(t =>
+          te(["కు వెళ్ళాలి","కి వెళ్ళాలి","కు పోవాలి","కి పోవాలి"]) && findVillage(t)
+        ) || "";
+        const tv = findVillage(destText);
+        if (tv) {
+          setTo(tv);
+          speak(`గమ్యస్థానం ${villageName(tv)} సెట్ అయింది`, lang);
+          showVoiceFeedback("voice.cmd.to_set"); return;
+        }
+      }
+
+      if (isFromBusCmd) {
+        const srcText = alternatives.find(t =>
+          (t.includes("నుండి") || t.includes("నుంచి")) && findVillage(t)
+        ) || "";
+        const fv = findVillage(srcText);
+        if (fv) {
+          setFrom(fv);
+          speak(`ప్రారంభ స్థానం ${villageName(fv)} సెట్ అయింది`, lang);
+          showVoiceFeedback("voice.cmd.from_set"); return;
+        }
+      }
+
+      if (isStartCmd) {
+        handleStartTracking();
+        speak(lang === "te" ? "బస్సు ట్రాకింగ్ మొదలైంది" : "Tracking started", lang);
+        showVoiceFeedback("voice.cmd.start");
+      } else if (isStopCmd) {
+        handleStopTracking();
+        speak(lang === "te" ? "ట్రాకింగ్ ఆపారు" : "Tracking stopped", lang);
+        showVoiceFeedback("voice.cmd.stop");
+      } else if (isEtaCmd) {
         handleAnnounceEta();
-      } else if (/\b(center|find|locate|where|bus)\b/.test(combined) || alternatives.some(t => t.includes("బస్సు") || t.includes("చూపించు") || t.includes("ఎక్కడ"))) {
-        handleCenterOnBus(); speak(lang === "te" ? "బస్సుపై కేంద్రీకరిస్తోంది" : "Centering on bus", lang); showVoiceFeedback("voice.cmd.center");
-      } else if (/\b(route|path|show|hide)\b/.test(combined) || alternatives.some(t => t.includes("మార్గం") || t.includes("చూపు") || t.includes("దాచు"))) {
-        handleShowRoute(); speak(lang === "te" ? "మార్గం మారింది" : "Route toggled", lang); showVoiceFeedback("voice.cmd.route");
-      } else if (/\b(reset|clear|restart)\b/.test(combined) || alternatives.some(t => t.includes("రీసెట్") || t.includes("మళ్ళీ") || t.includes("క్లియర్"))) {
-        handleReset(); speak(lang === "te" ? "మ్యాప్ రీసెట్ అయింది" : "Map reset", lang); showVoiceFeedback("voice.cmd.reset");
-      } else if (/\b(telugu)\b/.test(combined) || alternatives.some(t => t.includes("తెలుగు"))) {
+      } else if (isCenterCmd) {
+        handleCenterOnBus();
+        speak(lang === "te" ? "బస్సు మ్యాప్‌లో చూపిస్తున్నాం" : "Centering on bus", lang);
+        showVoiceFeedback("voice.cmd.center");
+      } else if (isRouteCmd) {
+        handleShowRoute();
+        speak(lang === "te" ? "మార్గం చూపిస్తున్నాం" : "Route toggled", lang);
+        showVoiceFeedback("voice.cmd.route");
+      } else if (isResetCmd) {
+        handleReset();
+        speak(lang === "te" ? "మళ్ళీ మొదలు పెట్టాం" : "Map reset", lang);
+        showVoiceFeedback("voice.cmd.reset");
+      } else if (/\b(telugu)\b/.test(combined) || te(["తెలుగు"])) {
         setLang("te"); speak("తెలుగుకు మారింది", "te"); showVoiceFeedback("voice.cmd.lang_te");
-      } else if (/\b(english)\b/.test(combined) || alternatives.some(t => t.includes("ఇంగ్లీష్"))) {
+      } else if (/\b(english)\b/.test(combined) || te(["ఇంగ్లీష్"])) {
         setLang("en"); speak("Switched to English", "en"); showVoiceFeedback("voice.cmd.lang_en");
       } else {
-        speak(lang === "te" ? "ప్రయత్నించండి: ప్రారంభించు, ఆపు, లేదా గ్రామం పేరు" : "Say: start, stop, eta, reset, or a village name", lang);
+        speak(
+          lang === "te"
+            ? "ఒక్కసారి చెప్పండి: మొదలు పెట్టు, ఆపు, ఎప్పుడొస్తుంది, లేదా గ్రామం పేరు"
+            : "Say: start, stop, when will it arrive, or a village name",
+          lang
+        );
         showVoiceFeedback("voice.cmd.unknown");
       }
     };
