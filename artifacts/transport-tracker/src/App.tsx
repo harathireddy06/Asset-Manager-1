@@ -1,8 +1,10 @@
+import { useEffect } from "react";
 import { Switch, Route, Router as WouterRouter } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { LanguageProvider } from "@/contexts/LanguageContext";
+import { attachGlobalButtonVoice } from "@/utils/voiceAssistant";
 
 import MapTracker from "@/pages/MapTracker";
 import NotFound from "@/pages/not-found";
@@ -17,6 +19,11 @@ const queryClient = new QueryClient({
 });
 
 function App() {
+  useEffect(() => {
+    const cleanup = attachGlobalButtonVoice();
+    return cleanup;
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       <LanguageProvider>

@@ -9,7 +9,7 @@ import { useLanguage, VILLAGE_NAMES_TE } from "@/contexts/LanguageContext";
 import type { Map as LeafletMap } from "leaflet";
 import {
   say, announceRoute, announceArrival, announceApproachingStop,
-  announceEta, speakBilingual, speakTelugu, resetVoiceState, MSGS,
+  announceEta, speakBilingual, speakTelugu, resetVoiceState, setVoiceLang, MSGS,
 } from "@/utils/voiceAssistant";
 
 const VILLAGE_COORDS: Record<string, [number, number]> = {
@@ -99,6 +99,8 @@ interface SimBusInfo {
 
 export default function MapTracker() {
   const { lang, setLang, toggleLang, t, villageName } = useLanguage();
+
+  useEffect(() => { setVoiceLang(lang); }, [lang]);
 
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");

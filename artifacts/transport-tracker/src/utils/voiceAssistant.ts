@@ -7,9 +7,13 @@ interface SpeakOptions {
 
 let _lastText = "";
 let _lastTime = 0;
+let _lastActionAt = 0;
+let _currentLang: Lang = "te";
 let _announcedNearby = new Set<string>();
+let _globalCleanup: (() => void) | null = null;
 
 const DEBOUNCE_MS = 4500;
+const ACTION_GUARD_MS = 300;
 
 function getTeluguVoice(): SpeechSynthesisVoice | null {
   if (!("speechSynthesis" in window)) return null;
@@ -21,6 +25,10 @@ function getTeluguVoice(): SpeechSynthesisVoice | null {
   );
 }
 
+export function setVoiceLang(lang: Lang): void {
+  _currentLang = lang;
+}
+
 export function speakTelugu(text: string, opts: SpeakOptions = {}): void {
   if (!("speechSynthesis" in window)) return;
 
@@ -28,6 +36,7 @@ export function speakTelugu(text: string, opts: SpeakOptions = {}): void {
   if (!opts.force && text === _lastText && now - _lastTime < DEBOUNCE_MS) return;
   _lastText = text;
   _lastTime = now;
+  _lastActionAt = now;
 
   window.speechSynthesis.cancel();
 
@@ -56,6 +65,7 @@ export function speakBilingual(
   if (!opts.force && text === _lastText && now - _lastTime < DEBOUNCE_MS) return;
   _lastText = text;
   _lastTime = now;
+  _lastActionAt = now;
 
   window.speechSynthesis.cancel();
 
@@ -97,6 +107,7 @@ export function announceRoute(
 ): void {
   if (!("speechSynthesis" in window)) return;
   window.speechSynthesis.cancel();
+  _lastActionAt = Date.now();
 
   if (lang === "te") {
     queueUtterance("మార్గం సెట్ అయింది", "te", 0);
@@ -150,18 +161,18 @@ export function announceEta(eta: string, lang: Lang): void {
 }
 
 export const MSGS = {
-  trackingStarted:  { te: "బస్సు ట్రాకింగ్ మొదలైంది",               en: "Tracking started" },
-  trackingStopped:  { te: "ట్రాకింగ్ ఆపబడింది",                     en: "Tracking stopped" },
+  trackingStarted:  { te: "బస్సు ట్రాకింగ్ మొదలైంది",                  en: "Tracking started" },
+  trackingStopped:  { te: "ట్రాకింగ్ ఆపబడింది",                        en: "Tracking stopped" },
   centerOnBus:      { te: "బస్ ప్రస్తుత స్థానం పైకి తీసుకువస్తున్నాం", en: "Centering on bus" },
-  routeHidden:      { te: "మార్గాన్ని దాచారు",                       en: "Route hidden" },
-  routeShown:       { te: "మార్గం చూపిస్తున్నాం",                   en: "Route shown" },
-  mapReset:         { te: "మ్యాప్ రీసెట్ చేయబడింది",               en: "Map reset" },
-  noRoute:          { te: "ముందు మార్గం సెట్ చేయండి",               en: "Set a route first" },
-  noTracking:       { te: "ట్రాకింగ్ జరగడం లేదు",                   en: "No active tracking" },
-  voiceError:       { te: "మైక్రోఫోన్ లోపం, మళ్ళీ ప్రయత్నించండి",  en: "Mic error, try again" },
-  routeSet:         { te: "మార్గం సెట్ అయింది",                     en: "Route set" },
-  fromSet:          { te: "బయలుదేరే స్థానం సెట్ అయింది",            en: "Starting point set" },
-  toSet:            { te: "గమ్యస్థానం సెట్ అయింది",                 en: "Destination set" },
+  routeHidden:      { te: "మార్గాన్ని దాచారు",                          en: "Route hidden" },
+  routeShown:       { te: "మార్గం చూపిస్తున్నాం",                      en: "Route shown" },
+  mapReset:         { te: "మ్యాప్ రీసెట్ చేయబడింది",                  en: "Map reset" },
+  noRoute:          { te: "ముందు మార్గం సెట్ చేయండి",                  en: "Set a route first" },
+  noTracking:       { te: "ట్రాకింగ్ జరగడం లేదు",                      en: "No active tracking" },
+  voiceError:       { te: "మైక్రోఫోన్ లోపం, మళ్ళీ ప్రయత్నించండి",     en: "Mic error, try again" },
+  routeSet:         { te: "మార్గం సెట్ అయింది",                        en: "Route set" },
+  fromSet:          { te: "బయలుదేరే స్థానం సెట్ అయింది",               en: "Starting point set" },
+  toSet:            { te: "గమ్యస్థానం సెట్ అయింది",                    en: "Destination set" },
   helpHint:         { te: "చెప్పండి: మొదలు పెట్టు, ఆపు, లేదా గ్రామం పేరు", en: "Say: start, stop, or a village name" },
 } as const;
 
@@ -169,8 +180,72 @@ export function say(key: keyof typeof MSGS, lang: Lang, opts: SpeakOptions = {})
   speakBilingual(MSGS[key].te, MSGS[key].en, lang, opts);
 }
 
+const BUTTON_TEXT_MAP: Record<string, { te: string; en: string }> = {
+  "stop tracking":     { te: "ట్రాకింగ్ ఆపబడింది",                        en: "Tracking stopped" },
+  "start tracking":    { te: "బస్సు ట్రాకింగ్ మొదలైంది",                  en: "Tracking started" },
+  "track bus":         { te: "బస్సు ట్రాకింగ్ మొదలైంది",                  en: "Tracking started" },
+  "center on bus":     { te: "బస్ ప్రస్తుత స్థానం పైకి తీసుకువస్తున్నాం", en: "Centering on bus" },
+  "hide route":        { te: "మార్గాన్ని దాచారు",                          en: "Route hidden" },
+  "show route":        { te: "మార్గం చూపిస్తున్నాం",                      en: "Route shown" },
+  "reset map":         { te: "మ్యాప్ రీసెట్ చేయబడింది",                  en: "Map reset" },
+  "apply route":       { te: "మార్గం సెట్ అయింది",                        en: "Route applied" },
+  "track":             { te: "బస్సు ట్రాకింగ్ మొదలైంది",                  en: "Tracking started" },
+  "route":             { te: "మార్గం ఎంచుకోండి",                          en: "Select route" },
+  "stops":             { te: "స్టాప్‌లు చూపిస్తున్నాం",                   en: "Showing stops" },
+  "en":                { te: "",                                              en: "" },
+  "తె":               { te: "",                                              en: "" },
+  "voice":             { te: "",                                              en: "" },
+  "listening...":      { te: "",                                              en: "" },
+};
+
+export function getTeluguMessage(buttonText: string): { te: string; en: string } | null {
+  const normalized = buttonText.toLowerCase().trim();
+  if (!normalized) return null;
+
+  const exact = BUTTON_TEXT_MAP[normalized];
+  if (exact) return exact.te || exact.en ? exact : null;
+
+  for (const [key, val] of Object.entries(BUTTON_TEXT_MAP)) {
+    if (normalized.includes(key) || key.includes(normalized)) {
+      return val.te || val.en ? val : null;
+    }
+  }
+  return null;
+}
+
+export function attachGlobalButtonVoice(): () => void {
+  if (!("speechSynthesis" in window)) return () => {};
+
+  if (_globalCleanup) _globalCleanup();
+
+  const handler = (e: Event) => {
+    const target = e.target as HTMLElement;
+    const button = target.closest("button");
+    if (!button) return;
+
+    const now = Date.now();
+    if (now - _lastActionAt < ACTION_GUARD_MS) return;
+
+    const rawText = button.innerText.trim();
+    if (!rawText) return;
+
+    const mapped = getTeluguMessage(rawText);
+    if (!mapped) return;
+
+    const text = _currentLang === "te" ? mapped.te : mapped.en;
+    if (!text) return;
+
+    speakBilingual(mapped.te, mapped.en, _currentLang);
+  };
+
+  document.addEventListener("click", handler, false);
+  _globalCleanup = () => document.removeEventListener("click", handler, false);
+  return _globalCleanup;
+}
+
 export function resetVoiceState(): void {
   _lastText = "";
   _lastTime = 0;
+  _lastActionAt = 0;
   _announcedNearby.clear();
 }
