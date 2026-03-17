@@ -1,0 +1,153 @@
+Act as a senior full-stack engineer.
+
+Build a VOICE ASSISTANT FEATURE for a bus tracking web application (html, tailwind , javascript,python)that provides real-time Telugu voice navigation similar to Google Maps turn-by-turn guidance.
+
+CORE REQUIREMENTS:
+
+1. When user clicks any control button (Stop Tracking, Center on Bus, Hide Route, Reset Map), trigger a Telugu voice response.
+
+
+2. Voice output MUST be in Telugu language (not transliteration, actual Telugu speech).
+
+
+3. Use browser-native Web Speech API (SpeechSynthesisUtterance) ONLY. Do NOT introduce heavy external dependencies.
+
+
+4. Must support dynamic navigation instructions:
+
+
+
+Example: "500 మీటర్ల తర్వాత ఎడమవైపు తిరగండి"
+
+Example: "మీరు గమ్యానికి దగ్గరగా ఉన్నారు"
+
+5. Voice should auto-trigger on:
+
+
+
+Route updates
+
+Bus movement changes (based on GPS updates)
+
+Upcoming turns (distance threshold < 300m)
+
+TECH CONSTRAINTS (STRICT):
+
+Do NOT break existing UI or map rendering logic.
+
+Do NOT modify existing button handlers; only extend them.
+
+Wrap all voice logic inside a reusable module/service.
+
+Must not block main thread (no UI lag).
+
+Handle browser compatibility gracefully.
+
+Fail silently if speech synthesis not supported.
+
+Prevent repeated announcements (debounce or state tracking required).
+
+IMPLEMENTATION DETAILS:
+
+1. Create a utility module:
+
+
+
+voiceAssistant.js
+
+2. Core function:
+
+
+
+speakTelugu(text: string): void
+
+3. Voice Config:
+
+
+
+Language: "te-IN"
+
+Pitch: 1
+
+Rate: 1
+
+Select Telugu voice if available, fallback safely.
+
+4. Add event hooks:
+
+
+
+On button click → trigger context-based Telugu message.
+
+On route update → check next turn → announce.
+
+On ETA change → optional update.
+
+5. Add duplicate prevention:
+
+
+
+Maintain last spoken message
+
+Avoid repeating within short interval
+
+6. Add distance-based trigger:
+
+
+
+If next turn distance < 300m → speak once
+
+7. Ensure cleanup:
+
+
+
+Cancel previous speech before new one
+
+SAMPLE TELUGU RESPONSES:
+
+Stop Tracking → "ట్రాకింగ్ ఆపబడింది"
+
+Center on Bus → "బస్ ప్రస్తుత స్థానం పైకి తీసుకువస్తున్నాం"
+
+Hide Route → "మార్గాన్ని దాచారు"
+
+Reset Map → "మ్యాప్ రీసెట్ చేయబడింది"
+
+Turn Left → "ముందు ఎడమవైపు తిరగండి"
+
+Turn Right → "ముందు కుడివైపు తిరగండి"
+
+EDGE CASE HANDLING:
+
+If user clicks buttons rapidly → queue or cancel previous speech
+
+If GPS not available → do nothing (no errors)
+
+If Telugu voice not available → fallback to default but keep Telugu text
+
+OUTPUT FORMAT:
+
+Clean modular JavaScript code
+
+No unnecessary comments
+
+No breaking changes
+
+No placeholder logic
+
+Fully working implementation
+
+DO NOT:
+
+Do NOT hallucinate APIs
+
+Do NOT introduce backend dependency for voice
+
+Do NOT use third-party TTS services
+
+Do NOT modify unrelated files
+
+Do NOT create infinite loops in event listeners
+
+Deliver production-ready code.
+Backend python

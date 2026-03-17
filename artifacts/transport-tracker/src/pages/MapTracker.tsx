@@ -7,6 +7,10 @@ import {
 import FullScreenMap from "@/components/FullScreenMap";
 import { useLanguage, VILLAGE_NAMES_TE } from "@/contexts/LanguageContext";
 import type { Map as LeafletMap } from "leaflet";
+import {
+  say, announceRoute, announceArrival, announceApproachingStop,
+  announceEta, speakBilingual, speakTelugu, resetVoiceState, MSGS,
+} from "@/utils/voiceAssistant";
 
 const VILLAGE_COORDS: Record<string, [number, number]> = {
   "Suryapet":        [17.1415, 79.6216],
@@ -83,43 +87,6 @@ function getIntermediateStops(from: string, to: string): string[] {
   return stops.sort((a, b) => a.t - b.t).map(s => s.name);
 }
 
-function speak(text: string, lang: "en" | "te", loud = false) {
-  if (!("speechSynthesis" in window)) return;
-  window.speechSynthesis.cancel();
-  const utt = new SpeechSynthesisUtterance(text);
-  utt.lang = lang === "te" ? "te-IN" : "en-IN";
-  utt.rate = loud ? 0.72 : 0.88;
-  utt.volume = 1;
-  utt.pitch = loud ? 1.15 : 1.0;
-  window.speechSynthesis.speak(utt);
-}
-
-function speakRoute(fromVillage: string, toVillage: string, lang: "en" | "te",
-                    villageFn: (v: string) => string) {
-  if (!("speechSynthesis" in window)) return;
-  window.speechSynthesis.cancel();
-
-  const sayLine = (text: string, delay: number) => {
-    setTimeout(() => {
-      const utt = new SpeechSynthesisUtterance(text);
-      utt.lang = lang === "te" ? "te-IN" : "en-IN";
-      utt.rate = 0.72;
-      utt.volume = 1;
-      utt.pitch = 1.15;
-      window.speechSynthesis.speak(utt);
-    }, delay);
-  };
-
-  if (lang === "te") {
-    sayLine("మార్గం సెట్ అయింది", 0);
-    sayLine(`బయలుదేరే స్థానం: ${villageFn(fromVillage)}`, 1400);
-    sayLine(`చేరుకోవాల్సిన స్థానం: ${villageFn(toVillage)}`, 3200);
-  } else {
-    sayLine("Route set", 0);
-    sayLine(`Starting from: ${fromVillage}`, 900);
-    sayLine(`Going to: ${toVillage}`, 2200);
-  }
-}
 
 interface SimBusInfo {
   busNumber: string;
@@ -243,12 +210,22 @@ export default function MapTracker() {
         status: isNearEnd ? "arrived" : "on_time",
       } : prev);
 
+      const nextStopIdx = stops.findIndex((_, i) => {
+        const stopT = (i + 1) / (stops.length + 1);
+        return progress < stopT;
+      });
+      if (nextStopIdx >= 0) {
+        const nextStop = stops[nextStopIdx];
+        const stopCoord = VILLAGE_COORDS[nextStop];
+        if (stopCoord) {
+          const distKm = haversineKm(newPos[0], newPos[1], stopCoord[0], stopCoord[1]);
+          announceApproachingStop(nextStop, distKm * 1000, lang, villageName);
+        }
+      }
+
       if (isNearEnd && !arrivedRef.current) {
         arrivedRef.current = true;
-        const msg = lang === "te"
-          ? "మీరు స్టాప్‌కు చేరుకున్నారు."
-          : "You have reached the stop.";
-        speak(msg, lang);
+        announceArrival(to!, lang, villageName);
         setStopAlert({ village: to! });
         setTimeout(() => setStopAlert(null), 6000);
       }
@@ -281,20 +258,33 @@ export default function MapTracker() {
     setDisplayPos(null);
     arrivedRef.current = false;
     setIsTracking(true);
-  }, [from, to]);
+    say("trackingStarted", lang);
+  }, [from, to, lang]);
 
   const handleStopTracking = useCallback(() => {
     setIsTracking(false);
     if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
-  }, []);
+    say("trackingStopped", lang);
+  }, [lang]);
 
   const handleCenterOnBus = useCallback(() => {
     if (mapInstance && displayPos) {
       mapInstance.setView(displayPos, 12, { animate: true });
+      say("centerOnBus", lang);
     }
-  }, [mapInstance, displayPos]);
+  }, [mapInstance, displayPos, lang]);
 
-  const handleShowRoute = useCallback(() => setShowRoute(v => !v), []);
+  const handleShowRoute = useCallback(() => {
+    setShowRoute(v => {
+      const next = !v;
+      speakBilingual(
+        next ? MSGS.routeShown.te : MSGS.routeHidden.te,
+        next ? MSGS.routeShown.en : MSGS.routeHidden.en,
+        lang
+      );
+      return next;
+    });
+  }, [lang]);
 
   const handleReset = useCallback(() => {
     setIsTracking(false);
@@ -310,13 +300,14 @@ export default function MapTracker() {
     setTo("");
     arrivedRef.current = false;
     currentPosRef.current = null;
+    resetVoiceState();
     if (mapInstance) mapInstance.setView([17.385, 78.4867], 8, { animate: true });
-  }, [mapInstance]);
+    say("mapReset", lang);
+  }, [mapInstance, lang]);
 
   const handleAnnounceEta = useCallback(() => {
-    if (!eta) { speak(lang === "te" ? "ట్రాకింగ్ ప్రారంభమైంది లేదు" : "No active tracking", lang); return; }
-    const msg = lang === "te" ? `అంచనా సమయం ${eta}` : `Estimated arrival in ${eta}`;
-    speak(msg, lang);
+    if (!eta) { say("noTracking", lang); return; }
+    announceEta(eta, lang);
     showVoiceFeedback("voice.cmd.eta");
   }, [eta, lang, showVoiceFeedback]);
 
@@ -376,7 +367,7 @@ export default function MapTracker() {
           const tv = findVillage(m[2]);
           if (fv && tv && fv !== tv) {
             setFrom(fv); setTo(tv);
-            speakRoute(fv, tv, lang, villageName);
+            announceRoute(fv, tv, lang, villageName);
             showVoiceFeedback("voice.cmd.route_set"); return;
           }
         }
@@ -414,7 +405,7 @@ export default function MapTracker() {
 
         if (fv && tv && fv !== tv) {
           setFrom(fv); setTo(tv);
-          speakRoute(fv, tv, lang, villageName);
+          announceRoute(fv, tv, lang, villageName);
           showVoiceFeedback("voice.cmd.route_set"); return;
         }
       }
@@ -426,7 +417,7 @@ export default function MapTracker() {
         const fv = findVillage(fromPattern);
         if (fv) {
           setFrom(fv);
-          speak(lang === "te" ? `బయలుదేరే స్థానం: ${villageName(fv)}` : `Starting from ${fv}`, lang, true);
+          speakBilingual(`బయలుదేరే స్థానం: ${villageName(fv)}`, `Starting from ${fv}`, lang, { loud: true, force: true });
           showVoiceFeedback("voice.cmd.from_set"); return;
         }
       }
@@ -438,7 +429,7 @@ export default function MapTracker() {
         const tv = findVillage(toPattern);
         if (tv) {
           setTo(tv);
-          speak(lang === "te" ? `చేరుకోవాల్సిన స్థానం: ${villageName(tv)}` : `Going to ${tv}`, lang, true);
+          speakBilingual(`చేరుకోవాల్సిన స్థానం: ${villageName(tv)}`, `Going to ${tv}`, lang, { loud: true, force: true });
           showVoiceFeedback("voice.cmd.to_set"); return;
         }
       }
@@ -454,13 +445,13 @@ export default function MapTracker() {
 
       if (allMentioned.length >= 2) {
         setFrom(allMentioned[0]); setTo(allMentioned[1]);
-        speakRoute(allMentioned[0], allMentioned[1], lang, villageName);
+        announceRoute(allMentioned[0], allMentioned[1], lang, villageName);
         showVoiceFeedback("voice.cmd.route_set"); return;
       }
       if (allMentioned.length === 1) {
         if (!from) { setFrom(allMentioned[0]); showVoiceFeedback("voice.cmd.from_set"); }
         else { setTo(allMentioned[0]); showVoiceFeedback("voice.cmd.to_set"); }
-        speak(villageName(allMentioned[0]), lang, true); return;
+        speakBilingual(villageName(allMentioned[0]), allMentioned[0], lang, { loud: true, force: true }); return;
       }
 
       const te = (words: string[]) => words.some(w => alternatives.some(t => t.includes(w)));
@@ -517,7 +508,7 @@ export default function MapTracker() {
         const tv = findVillage(destText);
         if (tv) {
           setTo(tv);
-          speak(`గమ్యస్థానం ${villageName(tv)} సెట్ అయింది`, lang);
+          speakBilingual(`గమ్యస్థానం ${villageName(tv)} సెట్ అయింది`, `Destination: ${tv}`, lang, { loud: true, force: true });
           showVoiceFeedback("voice.cmd.to_set"); return;
         }
       }
@@ -529,42 +520,36 @@ export default function MapTracker() {
         const fv = findVillage(srcText);
         if (fv) {
           setFrom(fv);
-          speak(`ప్రారంభ స్థానం ${villageName(fv)} సెట్ అయింది`, lang);
+          speakBilingual(`బయలుదేరే స్థానం ${villageName(fv)} సెట్ అయింది`, `Starting from ${fv}`, lang, { loud: true, force: true });
           showVoiceFeedback("voice.cmd.from_set"); return;
         }
       }
 
       if (isStartCmd) {
         handleStartTracking();
-        speak(lang === "te" ? "బస్సు ట్రాకింగ్ మొదలైంది" : "Tracking started", lang);
         showVoiceFeedback("voice.cmd.start");
       } else if (isStopCmd) {
         handleStopTracking();
-        speak(lang === "te" ? "ట్రాకింగ్ ఆపారు" : "Tracking stopped", lang);
         showVoiceFeedback("voice.cmd.stop");
       } else if (isEtaCmd) {
         handleAnnounceEta();
       } else if (isCenterCmd) {
         handleCenterOnBus();
-        speak(lang === "te" ? "బస్సు మ్యాప్‌లో చూపిస్తున్నాం" : "Centering on bus", lang);
         showVoiceFeedback("voice.cmd.center");
       } else if (isRouteCmd) {
         handleShowRoute();
-        speak(lang === "te" ? "మార్గం చూపిస్తున్నాం" : "Route toggled", lang);
         showVoiceFeedback("voice.cmd.route");
       } else if (isResetCmd) {
         handleReset();
-        speak(lang === "te" ? "మళ్ళీ మొదలు పెట్టాం" : "Map reset", lang);
         showVoiceFeedback("voice.cmd.reset");
       } else if (/\b(telugu)\b/.test(combined) || te(["తెలుగు"])) {
-        setLang("te"); speak("తెలుగుకు మారింది", "te"); showVoiceFeedback("voice.cmd.lang_te");
+        setLang("te"); speakTelugu("తెలుగుకు మారింది"); showVoiceFeedback("voice.cmd.lang_te");
       } else if (/\b(english)\b/.test(combined) || te(["ఇంగ్లీష్"])) {
-        setLang("en"); speak("Switched to English", "en"); showVoiceFeedback("voice.cmd.lang_en");
+        setLang("en"); speakBilingual("", "Switched to English", "en"); showVoiceFeedback("voice.cmd.lang_en");
       } else {
-        speak(
-          lang === "te"
-            ? "ఒక్కసారి చెప్పండి: మొదలు పెట్టు, ఆపు, ఎప్పుడొస్తుంది, లేదా గ్రామం పేరు"
-            : "Say: start, stop, when will it arrive, or a village name",
+        speakBilingual(
+          "ఒక్కసారి చెప్పండి: మొదలు పెట్టు, ఆపు, ఎప్పుడొస్తుంది, లేదా గ్రామం పేరు",
+          "Say: start, stop, when will it arrive, or a village name",
           lang
         );
         showVoiceFeedback("voice.cmd.unknown");
