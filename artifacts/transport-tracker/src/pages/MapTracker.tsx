@@ -83,13 +83,42 @@ function getIntermediateStops(from: string, to: string): string[] {
   return stops.sort((a, b) => a.t - b.t).map(s => s.name);
 }
 
-function speak(text: string, lang: "en" | "te") {
+function speak(text: string, lang: "en" | "te", loud = false) {
   if (!("speechSynthesis" in window)) return;
   window.speechSynthesis.cancel();
   const utt = new SpeechSynthesisUtterance(text);
   utt.lang = lang === "te" ? "te-IN" : "en-IN";
-  utt.rate = 0.9;
+  utt.rate = loud ? 0.72 : 0.88;
+  utt.volume = 1;
+  utt.pitch = loud ? 1.15 : 1.0;
   window.speechSynthesis.speak(utt);
+}
+
+function speakRoute(fromVillage: string, toVillage: string, lang: "en" | "te",
+                    villageFn: (v: string) => string) {
+  if (!("speechSynthesis" in window)) return;
+  window.speechSynthesis.cancel();
+
+  const sayLine = (text: string, delay: number) => {
+    setTimeout(() => {
+      const utt = new SpeechSynthesisUtterance(text);
+      utt.lang = lang === "te" ? "te-IN" : "en-IN";
+      utt.rate = 0.72;
+      utt.volume = 1;
+      utt.pitch = 1.15;
+      window.speechSynthesis.speak(utt);
+    }, delay);
+  };
+
+  if (lang === "te") {
+    sayLine("మార్గం సెట్ అయింది", 0);
+    sayLine(`బయలుదేరే స్థానం: ${villageFn(fromVillage)}`, 1400);
+    sayLine(`చేరుకోవాల్సిన స్థానం: ${villageFn(toVillage)}`, 3200);
+  } else {
+    sayLine("Route set", 0);
+    sayLine(`Starting from: ${fromVillage}`, 900);
+    sayLine(`Going to: ${toVillage}`, 2200);
+  }
 }
 
 interface SimBusInfo {
@@ -324,13 +353,21 @@ export default function MapTracker() {
         );
       };
 
-      const teFromWords = ["నుండి", "నుంచి"];
-      const teToWords = ["కు", "కి", "వరకు"];
+      const teFromWords = ["నుండి", "నుంచి", "దగ్గర నుండి", "దగ్గర నుంచి"];
+      const teToWords = ["వరకు", "కు వెళ్ళాలి", "కి వెళ్ళాలి", "కు పోవాలి", "కి పోవాలి", "కు", "కి"];
 
       const fromToPatternEn = alternatives.find(t => /from .+ to .+/i.test(t));
-      const fromToPatternTe = alternatives.find(t =>
-        teFromWords.some(fw => t.includes(fw)) && teToWords.some(tw => t.includes(tw))
-      );
+
+      const fromToPatternTe = alternatives.find(t => {
+        const hasFrom = teFromWords.some(fw => t.includes(fw));
+        const hasTwoVillages =
+          Object.entries(teToEn).filter(([te]) => t.includes(te)).length >= 2 ||
+          (villages.filter(v => t.toLowerCase().includes(v.toLowerCase())).length >= 2) ||
+          (Object.entries(teToEn).some(([te]) => t.includes(te)) &&
+           villages.some(v => t.toLowerCase().includes(v.toLowerCase())));
+        const hasDest = teToWords.some(tw => t.includes(tw));
+        return hasFrom || (hasTwoVillages && hasDest);
+      });
 
       if (fromToPatternEn) {
         const m = fromToPatternEn.match(/from (.+?) to (.+)/i);
@@ -339,7 +376,7 @@ export default function MapTracker() {
           const tv = findVillage(m[2]);
           if (fv && tv && fv !== tv) {
             setFrom(fv); setTo(tv);
-            speak(lang === "te" ? `మార్గం సెట్ అయింది: ${villageName(fv)} నుండి ${villageName(tv)} కు` : `Route set from ${fv} to ${tv}`, lang);
+            speakRoute(fv, tv, lang, villageName);
             showVoiceFeedback("voice.cmd.route_set"); return;
           }
         }
@@ -347,16 +384,37 @@ export default function MapTracker() {
 
       if (fromToPatternTe) {
         const text = fromToPatternTe;
-        const fromWord = teFromWords.find(w => text.includes(w)) || "నుండి";
-        const toWord = teToWords.find(w => text.includes(w)) || "కు";
-        const beforeFrom = text.split(fromWord)[0];
-        const afterFrom = text.split(fromWord)[1]?.split(toWord)[0] || "";
-        const afterTo = text.split(toWord).slice(-1)[0] || "";
-        const fv = findVillage(beforeFrom) || findVillage(afterFrom);
-        const tv = findVillage(afterTo);
+        const fromWord = teFromWords.find(w => text.includes(w));
+        const toWord = teToWords.find(w => text.includes(w));
+
+        let fv: string | undefined;
+        let tv: string | undefined;
+
+        if (fromWord) {
+          const beforeFrom = text.slice(0, text.indexOf(fromWord));
+          const afterFrom = text.slice(text.indexOf(fromWord) + fromWord.length);
+          fv = findVillage(beforeFrom);
+          if (toWord) {
+            const betweenFromTo = afterFrom.slice(0, afterFrom.indexOf(toWord));
+            const afterTo = afterFrom.slice(afterFrom.indexOf(toWord) + toWord.length);
+            tv = findVillage(betweenFromTo) || findVillage(afterFrom) || findVillage(afterTo);
+          } else {
+            tv = findVillage(afterFrom);
+          }
+        }
+
+        if (!fv || !tv) {
+          const allInText = [
+            ...villages.filter(v => text.toLowerCase().includes(v.toLowerCase())),
+            ...Object.entries(teToEn).filter(([te]) => text.includes(te)).map(([, en]) => en),
+          ];
+          const unique = [...new Set(allInText)];
+          if (unique.length >= 2) { fv = unique[0]; tv = unique[1]; }
+        }
+
         if (fv && tv && fv !== tv) {
           setFrom(fv); setTo(tv);
-          speak(`మార్గం సెట్ అయింది: ${villageName(fv)} నుండి ${villageName(tv)} కు`, lang);
+          speakRoute(fv, tv, lang, villageName);
           showVoiceFeedback("voice.cmd.route_set"); return;
         }
       }
@@ -368,19 +426,19 @@ export default function MapTracker() {
         const fv = findVillage(fromPattern);
         if (fv) {
           setFrom(fv);
-          speak(lang === "te" ? `ప్రారంభ స్థానం: ${villageName(fv)}` : `Starting from ${fv}`, lang);
+          speak(lang === "te" ? `బయలుదేరే స్థానం: ${villageName(fv)}` : `Starting from ${fv}`, lang, true);
           showVoiceFeedback("voice.cmd.from_set"); return;
         }
       }
 
       const toPatternEn = alternatives.find(t => /\bto\b/i.test(t));
-      const toPatternTe = alternatives.find(t => teToWords.some(w => t.includes(w)));
+      const toPatternTe = alternatives.find(t => ["కు","కి","వరకు"].some(w => t.includes(w)));
       const toPattern = toPatternEn || toPatternTe;
       if (toPattern) {
         const tv = findVillage(toPattern);
         if (tv) {
           setTo(tv);
-          speak(lang === "te" ? `గమ్యస్థానం: ${villageName(tv)}` : `Destination set to ${tv}`, lang);
+          speak(lang === "te" ? `చేరుకోవాల్సిన స్థానం: ${villageName(tv)}` : `Going to ${tv}`, lang, true);
           showVoiceFeedback("voice.cmd.to_set"); return;
         }
       }
@@ -396,13 +454,13 @@ export default function MapTracker() {
 
       if (allMentioned.length >= 2) {
         setFrom(allMentioned[0]); setTo(allMentioned[1]);
-        speak(lang === "te" ? `మార్గం సెట్ అయింది: ${villageName(allMentioned[0])} నుండి ${villageName(allMentioned[1])} కు` : `Route set from ${allMentioned[0]} to ${allMentioned[1]}`, lang);
+        speakRoute(allMentioned[0], allMentioned[1], lang, villageName);
         showVoiceFeedback("voice.cmd.route_set"); return;
       }
       if (allMentioned.length === 1) {
         if (!from) { setFrom(allMentioned[0]); showVoiceFeedback("voice.cmd.from_set"); }
         else { setTo(allMentioned[0]); showVoiceFeedback("voice.cmd.to_set"); }
-        speak(villageName(allMentioned[0]), lang); return;
+        speak(villageName(allMentioned[0]), lang, true); return;
       }
 
       const te = (words: string[]) => words.some(w => alternatives.some(t => t.includes(w)));
@@ -645,12 +703,7 @@ export default function MapTracker() {
                 <button
                   onClick={() => {
                     setRouteExpanded(false);
-                    if (from && to) {
-                      const msg = lang === "te"
-                        ? `మార్గం ఎంచుకున్నారు: ${villageName(from)} నుండి ${villageName(to)} కు`
-                        : `Route selected: from ${from} to ${to}`;
-                      speak(msg, lang);
-                    }
+                    if (from && to) speakRoute(from, to, lang, villageName);
                   }}
                   className="w-full bg-orange-500 hover:bg-orange-600 text-white text-sm font-bold rounded-xl py-2 transition-colors"
                 >
