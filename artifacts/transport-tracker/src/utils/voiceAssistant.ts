@@ -60,6 +60,55 @@ export function setVoiceLang(lang: Lang): void {
   _currentLang = lang;
 }
 
+function speakWithFallback(
+  textTe: string,
+  textEn: string,
+  opts: SpeakOptions
+): void {
+  if (!("speechSynthesis" in window)) return;
+
+  const pitch = opts.loud ? 1.15 : 1.0;
+  const rate  = opts.loud ? 0.72 : 0.85;
+
+  const teluguVoice = getTeluguVoice();
+
+  const tryEnglish = () => {
+    window.speechSynthesis.cancel();
+    const fb = new SpeechSynthesisUtterance(textEn);
+    fb.lang = "en-IN";
+    fb.pitch = pitch;
+    fb.rate = rate;
+    fb.volume = 1;
+    window.speechSynthesis.speak(fb);
+  };
+
+  const utt = new SpeechSynthesisUtterance(textTe);
+  utt.lang = "te-IN";
+  utt.pitch = pitch;
+  utt.rate = rate;
+  utt.volume = 1;
+  if (teluguVoice) utt.voice = teluguVoice;
+
+  let started = false;
+
+  // If the browser silently ignores the te-IN utterance (no onstart, no onerror)
+  // fall back to English after 800 ms
+  const fallbackTimer = setTimeout(() => {
+    if (!started) tryEnglish();
+  }, 800);
+
+  utt.onstart = () => {
+    started = true;
+    clearTimeout(fallbackTimer);
+  };
+  utt.onerror = () => {
+    clearTimeout(fallbackTimer);
+    if (!started) tryEnglish();
+  };
+
+  window.speechSynthesis.speak(utt);
+}
+
 export function speakTelugu(text: string, opts: SpeakOptions = {}): void {
   if (!("speechSynthesis" in window)) return;
 
@@ -70,16 +119,7 @@ export function speakTelugu(text: string, opts: SpeakOptions = {}): void {
   _lastActionAt = now;
 
   window.speechSynthesis.cancel();
-
-  const utt = new SpeechSynthesisUtterance(text);
-  utt.lang = "te-IN";
-  utt.pitch = opts.loud ? 1.15 : 1.0;
-  utt.rate = opts.loud ? 0.72 : 0.85;
-  utt.volume = 1;
-  const voice = getTeluguVoice();
-  if (voice) utt.voice = voice;
-
-  window.speechSynthesis.speak(utt);
+  speakWithFallback(text, text, opts);
 }
 
 export function speakBilingual(
@@ -100,17 +140,16 @@ export function speakBilingual(
 
   window.speechSynthesis.cancel();
 
-  const utt = new SpeechSynthesisUtterance(text);
-  utt.lang = lang === "te" ? "te-IN" : "en-IN";
-  utt.pitch = opts.loud ? 1.15 : 1.0;
-  utt.rate = opts.loud ? 0.72 : 0.85;
-  utt.volume = 1;
   if (lang === "te") {
-    const voice = getTeluguVoice();
-    if (voice) utt.voice = voice;
+    speakWithFallback(textTe, textEn, opts);
+  } else {
+    const utt = new SpeechSynthesisUtterance(textEn);
+    utt.lang = "en-IN";
+    utt.pitch = opts.loud ? 1.15 : 1.0;
+    utt.rate  = opts.loud ? 0.72 : 0.85;
+    utt.volume = 1;
+    window.speechSynthesis.speak(utt);
   }
-
-  window.speechSynthesis.speak(utt);
 }
 
 function queueUtterance(textTe: string, textEn: string, lang: Lang, delay: number): void {
