@@ -14,6 +14,7 @@ let _lastTime = 0;
 let _lastActionAt = 0;
 let _announcedNearby = new Set<string>();
 let _globalCleanup: (() => void) | null = null;
+let _currentAudio: HTMLAudioElement | null = null;
 
 const DEBOUNCE_MS = 4500;
 const ACTION_GUARD_MS = 300;
@@ -40,37 +41,73 @@ function getTeluguVoice(): SpeechSynthesisVoice | null {
   );
 }
 
+// ─── Telugu via proxy TTS (Google Translate, server-side proxy) ─────────────
+// Used when no native te-IN voice is installed in the browser.
+
+function speakTeluguViaProxy(text: string): void {
+  // Stop any currently playing audio
+  if (_currentAudio) {
+    _currentAudio.pause();
+    _currentAudio = null;
+  }
+
+  const url = `/api/tts?lang=te&text=${encodeURIComponent(text)}`;
+  const audio = new Audio(url);
+  _currentAudio = audio;
+  audio.play().catch(err => {
+    console.warn("[voice] proxy TTS failed:", err);
+  });
+}
+
 // ─── Core speak ─────────────────────────────────────────────────────────────
-// Always speaks text that the current voice can actually pronounce.
-// - If te-IN voice found  → speak Telugu text with that voice
-// - If no te-IN voice     → speak English text with the default voice
-//                           (Telugu Unicode is unpronounceable by most voices)
-// - Small 250 ms delay if voices haven't loaded yet
+// Priority:
+//   Telugu mode + native te-IN voice  → Web Speech API (best quality)
+//   Telugu mode + no native voice     → Proxy TTS (Google Translate, actual Telugu)
+//   English mode                      → Web Speech API with en-IN
 
 function speak(textTe: string, textEn: string, lang: Lang, opts: SpeakOptions): void {
+  if (typeof window === "undefined") return;
+
+  if (lang === "te") {
+    const teVoice = getTeluguVoice();
+
+    if (teVoice) {
+      // Native te-IN voice available — use Web Speech API
+      if ("speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+        if (_currentAudio) { _currentAudio.pause(); _currentAudio = null; }
+
+        const utt    = new SpeechSynthesisUtterance(textTe);
+        utt.lang     = "te-IN";
+        utt.voice    = teVoice;
+        utt.pitch    = opts.loud ? 1.15 : 1.0;
+        utt.rate     = opts.loud ? 0.72 : 0.85;
+        utt.volume   = 1;
+        window.speechSynthesis.speak(utt);
+      }
+    } else {
+      // No native Telugu voice — use server-side proxy TTS for real Telugu audio
+      if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+      speakTeluguViaProxy(textTe);
+    }
+    return;
+  }
+
+  // English mode
   if (!("speechSynthesis" in window)) return;
+  if (_currentAudio) { _currentAudio.pause(); _currentAudio = null; }
+  window.speechSynthesis.cancel();
 
   const doSpeak = () => {
-    window.speechSynthesis.cancel();
-
-    const teVoice = lang === "te" ? getTeluguVoice() : null;
-
-    // Use Telugu voice + text when available; otherwise fall back to the
-    // default voice with English text so audio is guaranteed.
-    const text       = (lang === "te" && !teVoice) ? textEn : (lang === "te" ? textTe : textEn);
-    const utterLang  = (lang === "te" && !teVoice) ? "en-IN" : (lang === "te" ? "te-IN" : "en-IN");
-
-    const utt    = new SpeechSynthesisUtterance(text);
-    utt.lang     = utterLang;
+    const utt    = new SpeechSynthesisUtterance(textEn);
+    utt.lang     = "en-IN";
     utt.pitch    = opts.loud ? 1.15 : 1.0;
     utt.rate     = opts.loud ? 0.72 : 0.85;
     utt.volume   = 1;
-    if (teVoice) utt.voice = teVoice;
-
     window.speechSynthesis.speak(utt);
   };
 
-  // If voices haven't loaded yet, wait briefly and retry.
+  // Small delay if voices haven't loaded yet
   if (_voices.length === 0) {
     setTimeout(() => { loadVoices(); doSpeak(); }, 250);
   } else {
@@ -85,7 +122,7 @@ export function setVoiceLang(lang: Lang): void {
 }
 
 export function speakTelugu(text: string, opts: SpeakOptions = {}): void {
-  if (!("speechSynthesis" in window)) return;
+  if (typeof window === "undefined") return;
   const now = Date.now();
   if (!opts.force && text === _lastText && now - _lastTime < DEBOUNCE_MS) return;
   _lastText = text;
@@ -100,7 +137,7 @@ export function speakBilingual(
   lang: Lang,
   opts: SpeakOptions = {}
 ): void {
-  if (!("speechSynthesis" in window)) return;
+  if (typeof window === "undefined") return;
   const text = lang === "te" ? textTe : textEn;
   const now  = Date.now();
   if (!opts.force && text === _lastText && now - _lastTime < DEBOUNCE_MS) return;
@@ -112,7 +149,7 @@ export function speakBilingual(
 
 function queueUtterance(textTe: string, textEn: string, lang: Lang, delay: number): void {
   setTimeout(() => {
-    if (!("speechSynthesis" in window)) return;
+    if (typeof window === "undefined") return;
     speak(textTe, textEn, lang, { loud: true });
   }, delay);
 }
@@ -123,8 +160,9 @@ export function announceRoute(
   lang: Lang,
   villageFn: (v: string) => string
 ): void {
-  if (!("speechSynthesis" in window)) return;
-  window.speechSynthesis.cancel();
+  if (typeof window === "undefined") return;
+  if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+  if (_currentAudio) { _currentAudio.pause(); _currentAudio = null; }
   _lastActionAt = Date.now();
 
   queueUtterance("మార్గం సెట్ అయింది", "Route set", lang, 0);
@@ -132,13 +170,13 @@ export function announceRoute(
     `బయలుదేరే స్థానం: ${villageFn(fromVillage)}`,
     `Starting from: ${fromVillage}`,
     lang,
-    lang === "te" ? 1400 : 900
+    lang === "te" ? 1600 : 900
   );
   queueUtterance(
     `చేరుకోవాల్సిన స్థానం: ${villageFn(toVillage)}`,
     `Going to: ${toVillage}`,
     lang,
-    lang === "te" ? 3200 : 2200
+    lang === "te" ? 3600 : 2200
   );
 }
 
@@ -247,7 +285,7 @@ export function getTeluguMessage(buttonText: string): { te: string; en: string }
 }
 
 export function attachGlobalButtonVoice(): () => void {
-  if (!("speechSynthesis" in window)) return () => {};
+  if (typeof window === "undefined") return () => {};
 
   if (_globalCleanup) _globalCleanup();
 
@@ -281,4 +319,5 @@ export function resetVoiceState(): void {
   _lastTime = 0;
   _lastActionAt = 0;
   _announcedNearby.clear();
+  if (_currentAudio) { _currentAudio.pause(); _currentAudio = null; }
 }
