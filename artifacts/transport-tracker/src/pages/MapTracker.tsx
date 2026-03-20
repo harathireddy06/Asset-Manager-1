@@ -272,9 +272,36 @@ export default function MapTracker() {
   const handleCenterOnBus = useCallback(() => {
     if (mapInstance && displayPos) {
       mapInstance.setView(displayPos, 12, { animate: true });
-      say("centerOnBus", lang);
+
+      if (isTracking && (from || intermediateStops.length || to)) {
+        // Find the nearest stop to the bus's current position
+        const allStops = [from, ...intermediateStops, to].filter(Boolean) as string[];
+        let nearestStop = "";
+        let minDist = Infinity;
+        for (const stopName of allStops) {
+          const coord = VILLAGE_COORDS[stopName];
+          if (!coord) continue;
+          const dist = haversineKm(displayPos[0], displayPos[1], coord[0], coord[1]);
+          if (dist < minDist) {
+            minDist = dist;
+            nearestStop = stopName;
+          }
+        }
+        if (nearestStop) {
+          speakBilingual(
+            `బస్సు ప్రస్తుతం ${villageName(nearestStop)} దగ్గర ఉంది`,
+            `Bus is currently near ${nearestStop}`,
+            lang,
+            { force: true }
+          );
+        } else {
+          say("centerOnBus", lang);
+        }
+      } else {
+        say("centerOnBus", lang);
+      }
     }
-  }, [mapInstance, displayPos, lang]);
+  }, [mapInstance, displayPos, lang, isTracking, from, to, intermediateStops, villageName]);
 
   const handleShowRoute = useCallback(() => {
     setShowRoute(v => {
