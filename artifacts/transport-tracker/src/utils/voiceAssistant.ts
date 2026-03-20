@@ -8,20 +8,21 @@ interface SpeakOptions {
 let _lastText = "";
 let _lastTime = 0;
 let _lastActionAt = 0;
-let _currentLang: Lang = "te";
+let _currentLang: Lang = "en";
 let _announcedNearby = new Set<string>();
 let _globalCleanup: (() => void) | null = null;
 let _cachedVoices: SpeechSynthesisVoice[] = [];
 
+// null = still detecting, true = te-IN works, false = not supported
+let _teluguSupported: boolean | null = null;
+
 const DEBOUNCE_MS = 4500;
 const ACTION_GUARD_MS = 300;
 
-if (typeof window !== "undefined" && "speechSynthesis" in window) {
-  const loadVoices = () => {
-    _cachedVoices = window.speechSynthesis.getVoices();
-  };
-  loadVoices();
-  window.speechSynthesis.onvoiceschanged = loadVoices;
+// ─── Voice loading ─────────────────────────────────────────────────────────
+
+function loadVoices(): void {
+  _cachedVoices = window.speechSynthesis.getVoices();
 }
 
 function getTeluguVoice(): SpeechSynthesisVoice | null {
@@ -33,91 +34,136 @@ function getTeluguVoice(): SpeechSynthesisVoice | null {
   );
 }
 
-function hasTeluguVoice(): boolean {
-  return getTeluguVoice() !== null;
+// ─── Proactive te-IN detection ─────────────────────────────────────────────
+// Runs silently on module load so the result is cached before the user
+// ever clicks a button. No delay on first interaction.
+
+function runTeluguDetection(): void {
+  if (_teluguSupported !== null) return;
+
+  // Fast path: explicit Telugu voice found in voice list
+  const voices = _cachedVoices.length ? _cachedVoices : window.speechSynthesis.getVoices();
+  if (voices.some(v => v.lang === "te-IN" || v.lang.startsWith("te"))) {
+    _teluguSupported = true;
+    return;
+  }
+
+  // Probe with a volume-0 utterance. onstart means the engine accepted te-IN;
+  // onerror or timeout means it cannot handle it.
+  const probe = new SpeechSynthesisUtterance("అ");
+  probe.lang  = "te-IN";
+  probe.volume = 0;
+
+  const timer = setTimeout(() => {
+    if (_teluguSupported === null) _teluguSupported = false;
+  }, 1500);
+
+  probe.onstart = () => {
+    clearTimeout(timer);
+    _teluguSupported = true;
+    // Do NOT cancel — let it finish silently (volume 0)
+  };
+  probe.onerror = () => {
+    clearTimeout(timer);
+    _teluguSupported = false;
+  };
+
+  window.speechSynthesis.speak(probe);
 }
 
-function buildUtterance(
-  textTe: string,
-  textEn: string,
-  lang: Lang,
-  opts: SpeakOptions
-): SpeechSynthesisUtterance {
-  const text = lang === "te" ? textTe : textEn;
-  const utt = new SpeechSynthesisUtterance(text);
-  utt.lang = lang === "te" ? "te-IN" : "en-IN";
-  utt.pitch = opts.loud ? 1.15 : 1.0;
-  utt.rate = opts.loud ? 0.72 : 0.85;
+if (typeof window !== "undefined" && "speechSynthesis" in window) {
+  loadVoices();
+  window.speechSynthesis.onvoiceschanged = () => {
+    loadVoices();
+    runTeluguDetection();
+  };
+  // Small delay so the voice list has a chance to populate first
+  setTimeout(runTeluguDetection, 200);
+}
+
+// ─── Core speak helpers ────────────────────────────────────────────────────
+
+function makeUtt(text: string, lang: string, opts: SpeakOptions): SpeechSynthesisUtterance {
+  const utt  = new SpeechSynthesisUtterance(text);
+  utt.lang   = lang;
+  utt.pitch  = opts.loud ? 1.15 : 1.0;
+  utt.rate   = opts.loud ? 0.72 : 0.85;
   utt.volume = 1;
-  if (lang === "te") {
-    const voice = getTeluguVoice();
-    if (voice) utt.voice = voice;
-  }
   return utt;
 }
 
-export function setVoiceLang(lang: Lang): void {
-  _currentLang = lang;
+function speakEnglish(text: string, opts: SpeakOptions): void {
+  const utt = makeUtt(text, "en-IN", opts);
+  window.speechSynthesis.speak(utt);
 }
 
-function speakWithFallback(
-  textTe: string,
-  textEn: string,
-  opts: SpeakOptions
-): void {
+function speakTe(text: string, opts: SpeakOptions): void {
+  const utt = makeUtt(text, "te-IN", opts);
+  const voice = getTeluguVoice();
+  if (voice) utt.voice = voice;
+  window.speechSynthesis.speak(utt);
+}
+
+// Speak Telugu if supported, otherwise English — no timer, no guessing.
+function speakWithFallback(textTe: string, textEn: string, opts: SpeakOptions): void {
   if (!("speechSynthesis" in window)) return;
 
-  const pitch = opts.loud ? 1.15 : 1.0;
-  const rate  = opts.loud ? 0.72 : 0.85;
+  if (_teluguSupported === true) {
+    speakTe(textTe, opts);
+    return;
+  }
 
-  const teluguVoice = getTeluguVoice();
+  if (_teluguSupported === false) {
+    speakEnglish(textEn, opts);
+    return;
+  }
 
-  const tryEnglish = () => {
-    window.speechSynthesis.cancel();
-    const fb = new SpeechSynthesisUtterance(textEn);
-    fb.lang = "en-IN";
-    fb.pitch = pitch;
-    fb.rate = rate;
-    fb.volume = 1;
-    window.speechSynthesis.speak(fb);
-  };
-
-  const utt = new SpeechSynthesisUtterance(textTe);
-  utt.lang = "te-IN";
-  utt.pitch = pitch;
-  utt.rate = rate;
-  utt.volume = 1;
-  if (teluguVoice) utt.voice = teluguVoice;
-
+  // Detection still running: attempt Telugu and fall back after 800 ms if no
+  // onstart fires (same silent-failure guard as before, but only for this
+  // brief window before detection completes).
   let started = false;
 
-  // If the browser silently ignores the te-IN utterance (no onstart, no onerror)
-  // fall back to English after 800 ms
-  const fallbackTimer = setTimeout(() => {
-    if (!started) tryEnglish();
+  const timer = setTimeout(() => {
+    if (!started) {
+      _teluguSupported = false;
+      window.speechSynthesis.cancel();
+      speakEnglish(textEn, opts);
+    }
   }, 800);
+
+  const utt = makeUtt(textTe, "te-IN", opts);
+  const voice = getTeluguVoice();
+  if (voice) utt.voice = voice;
 
   utt.onstart = () => {
     started = true;
-    clearTimeout(fallbackTimer);
+    clearTimeout(timer);
+    if (_teluguSupported === null) _teluguSupported = true;
   };
   utt.onerror = () => {
-    clearTimeout(fallbackTimer);
-    if (!started) tryEnglish();
+    clearTimeout(timer);
+    if (!started) {
+      _teluguSupported = false;
+      speakEnglish(textEn, opts);
+    }
   };
 
   window.speechSynthesis.speak(utt);
 }
 
+// ─── Public API ────────────────────────────────────────────────────────────
+
+export function setVoiceLang(lang: Lang): void {
+  _currentLang = lang;
+}
+
 export function speakTelugu(text: string, opts: SpeakOptions = {}): void {
   if (!("speechSynthesis" in window)) return;
-
   const now = Date.now();
   if (!opts.force && text === _lastText && now - _lastTime < DEBOUNCE_MS) return;
   _lastText = text;
   _lastTime = now;
   _lastActionAt = now;
-
   window.speechSynthesis.cancel();
   speakWithFallback(text, text, opts);
 }
@@ -131,8 +177,7 @@ export function speakBilingual(
   if (!("speechSynthesis" in window)) return;
 
   const text = lang === "te" ? textTe : textEn;
-
-  const now = Date.now();
+  const now  = Date.now();
   if (!opts.force && text === _lastText && now - _lastTime < DEBOUNCE_MS) return;
   _lastText = text;
   _lastTime = now;
@@ -143,20 +188,18 @@ export function speakBilingual(
   if (lang === "te") {
     speakWithFallback(textTe, textEn, opts);
   } else {
-    const utt = new SpeechSynthesisUtterance(textEn);
-    utt.lang = "en-IN";
-    utt.pitch = opts.loud ? 1.15 : 1.0;
-    utt.rate  = opts.loud ? 0.72 : 0.85;
-    utt.volume = 1;
-    window.speechSynthesis.speak(utt);
+    speakEnglish(textEn, opts);
   }
 }
 
 function queueUtterance(textTe: string, textEn: string, lang: Lang, delay: number): void {
   setTimeout(() => {
     if (!("speechSynthesis" in window)) return;
-    const utt = buildUtterance(textTe, textEn, lang, { loud: true });
-    window.speechSynthesis.speak(utt);
+    if (lang === "te") {
+      speakWithFallback(textTe, textEn, { loud: true });
+    } else {
+      speakEnglish(textEn, { loud: true });
+    }
   }, delay);
 }
 
