@@ -690,7 +690,7 @@ export default function MapTracker() {
                 <button
                   onClick={() => {
                     setRouteExpanded(false);
-                    if (from && to) speakRoute(from, to, lang, villageName);
+                    if (from && to) announceRoute(from, to, lang, villageName);
                   }}
                   className="w-full bg-orange-500 hover:bg-orange-600 text-white text-sm font-bold rounded-xl py-2 transition-colors"
                 >
