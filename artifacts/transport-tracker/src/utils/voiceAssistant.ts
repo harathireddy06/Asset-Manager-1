@@ -15,6 +15,7 @@ let _lastActionAt = 0;
 let _announcedNearby = new Set<string>();
 let _globalCleanup: (() => void) | null = null;
 let _currentAudio: HTMLAudioElement | null = null;
+let _proxySeq = 0; // increments on every new speak; lets proxyQueue detect interruption
 
 const DEBOUNCE_MS = 4500;
 const ACTION_GUARD_MS = 300;
@@ -43,20 +44,48 @@ function getTeluguVoice(): SpeechSynthesisVoice | null {
 
 // ─── Telugu via proxy TTS (Google Translate, server-side proxy) ─────────────
 // Used when no native te-IN voice is installed in the browser.
+// Returns a Promise that resolves when the audio finishes (or on error),
+// so callers can chain multiple phrases sequentially.
 
-function speakTeluguViaProxy(text: string): void {
-  // Stop any currently playing audio
+function speakTeluguViaProxy(text: string): Promise<void> {
+  _proxySeq++;
   if (_currentAudio) {
     _currentAudio.pause();
     _currentAudio = null;
   }
 
-  const url = `/api/tts?lang=te&text=${encodeURIComponent(text)}`;
-  const audio = new Audio(url);
-  _currentAudio = audio;
-  audio.play().catch(err => {
-    console.warn("[voice] proxy TTS failed:", err);
+  return new Promise<void>(resolve => {
+    const url = `/api/tts?lang=te&text=${encodeURIComponent(text)}`;
+    const audio = new Audio(url);
+    _currentAudio = audio;
+    audio.onended = () => resolve();
+    audio.onerror = (e) => {
+      console.warn("[voice] proxy TTS error:", e);
+      resolve();
+    };
+    audio.play().catch(e => {
+      console.warn("[voice] proxy TTS play() rejected:", e);
+      resolve();
+    });
   });
+}
+
+// Play an array of Telugu phrases one after the other via proxy.
+// Stops if another speak() call interrupts the chain (_proxySeq changes).
+async function proxyQueue(phrases: string[]): Promise<void> {
+  const seq = _proxySeq;
+  for (const phrase of phrases) {
+    if (_proxySeq !== seq) break; // interrupted — stop the chain
+    await new Promise<void>(resolve => {
+      if (_currentAudio) { _currentAudio.pause(); _currentAudio = null; }
+      const url = `/api/tts?lang=te&text=${encodeURIComponent(phrase)}`;
+      const audio = new Audio(url);
+      _currentAudio = audio;
+      audio.onended = () => resolve();
+      audio.onerror = () => resolve();
+      audio.play().catch(() => resolve());
+    });
+  }
 }
 
 // ─── Core speak ─────────────────────────────────────────────────────────────
@@ -165,19 +194,34 @@ export function announceRoute(
   if (_currentAudio) { _currentAudio.pause(); _currentAudio = null; }
   _lastActionAt = Date.now();
 
-  queueUtterance("మార్గం సెట్ అయింది", "Route set", lang, 0);
-  queueUtterance(
-    `బయలుదేరే స్థానం: ${villageFn(fromVillage)}`,
-    `Starting from: ${fromVillage}`,
-    lang,
-    lang === "te" ? 1600 : 900
-  );
-  queueUtterance(
-    `చేరుకోవాల్సిన స్థానం: ${villageFn(toVillage)}`,
-    `Going to: ${toVillage}`,
-    lang,
-    lang === "te" ? 3600 : 2200
-  );
+  const useProxy = lang === "te" && !getTeluguVoice();
+
+  if (useProxy) {
+    // Chain phrases sequentially — each one starts only after the previous finishes.
+    proxyQueue([
+      "మార్గం సెట్ అయింది",
+      `బయలుదేరే స్థానం: ${villageFn(fromVillage)}`,
+      `చేరుకోవాల్సిన స్థానం: ${villageFn(toVillage)}`,
+    ]);
+  } else {
+    // Web Speech API queues utterances automatically — push all three at once.
+    const enqueue = (textTe: string, textEn: string) => {
+      const text = lang === "te" ? textTe : textEn;
+      const utt  = new SpeechSynthesisUtterance(text);
+      utt.lang   = lang === "te" ? "te-IN" : "en-IN";
+      utt.pitch  = 1.15;
+      utt.rate   = 0.72;
+      utt.volume = 1;
+      if (lang === "te") {
+        const v = getTeluguVoice();
+        if (v) utt.voice = v;
+      }
+      window.speechSynthesis.speak(utt);
+    };
+    enqueue("మార్గం సెట్ అయింది", "Route set");
+    enqueue(`బయలుదేరే స్థానం: ${villageFn(fromVillage)}`, `Starting from: ${fromVillage}`);
+    enqueue(`చేరుకోవాల్సిన స్థానం: ${villageFn(toVillage)}`, `Going to: ${toVillage}`);
+  }
 }
 
 export function announceApproachingStop(
