@@ -18,8 +18,7 @@ let _globalCleanup: (() => void) | null = null;
 const DEBOUNCE_MS = 4500;
 const ACTION_GUARD_MS = 300;
 
-// ─── Voice loading ─────────────────────────────────────────────────────────
-// Load voices eagerly and keep them updated via onvoiceschanged.
+// ─── Voice loading (eager + reactive) ─────────────────────────────────────
 
 function loadVoices(): void {
   const v = window.speechSynthesis.getVoices();
@@ -42,35 +41,38 @@ function getTeluguVoice(): SpeechSynthesisVoice | null {
 }
 
 // ─── Core speak ─────────────────────────────────────────────────────────────
+// Always speaks text that the current voice can actually pronounce.
+// - If te-IN voice found  → speak Telugu text with that voice
+// - If no te-IN voice     → speak English text with the default voice
+//                           (Telugu Unicode is unpronounceable by most voices)
+// - Small 250 ms delay if voices haven't loaded yet
 
-function speak(text: string, lang: Lang, opts: SpeakOptions): void {
+function speak(textTe: string, textEn: string, lang: Lang, opts: SpeakOptions): void {
   if (!("speechSynthesis" in window)) return;
 
   const doSpeak = () => {
     window.speechSynthesis.cancel();
 
-    const utt = new SpeechSynthesisUtterance(text);
-    utt.lang   = lang === "te" ? "te-IN" : "en-IN";
-    utt.pitch  = opts.loud ? 1.15 : 1.0;
-    utt.rate   = opts.loud ? 0.72 : 0.85;
-    utt.volume = 1;
+    const teVoice = lang === "te" ? getTeluguVoice() : null;
 
-    if (lang === "te") {
-      const teVoice = getTeluguVoice();
-      // Use Telugu voice if available; otherwise leave voice unset so the
-      // browser picks the best available voice for te-IN.
-      if (teVoice) utt.voice = teVoice;
-    }
+    // Use Telugu voice + text when available; otherwise fall back to the
+    // default voice with English text so audio is guaranteed.
+    const text       = (lang === "te" && !teVoice) ? textEn : (lang === "te" ? textTe : textEn);
+    const utterLang  = (lang === "te" && !teVoice) ? "en-IN" : (lang === "te" ? "te-IN" : "en-IN");
+
+    const utt    = new SpeechSynthesisUtterance(text);
+    utt.lang     = utterLang;
+    utt.pitch    = opts.loud ? 1.15 : 1.0;
+    utt.rate     = opts.loud ? 0.72 : 0.85;
+    utt.volume   = 1;
+    if (teVoice) utt.voice = teVoice;
 
     window.speechSynthesis.speak(utt);
   };
 
-  // If voices haven't loaded yet, wait a short moment then try again.
+  // If voices haven't loaded yet, wait briefly and retry.
   if (_voices.length === 0) {
-    setTimeout(() => {
-      loadVoices();
-      doSpeak();
-    }, 250);
+    setTimeout(() => { loadVoices(); doSpeak(); }, 250);
   } else {
     doSpeak();
   }
@@ -89,7 +91,7 @@ export function speakTelugu(text: string, opts: SpeakOptions = {}): void {
   _lastText = text;
   _lastTime = now;
   _lastActionAt = now;
-  speak(text, "te", opts);
+  speak(text, text, "te", opts);
 }
 
 export function speakBilingual(
@@ -105,14 +107,13 @@ export function speakBilingual(
   _lastText = text;
   _lastTime = now;
   _lastActionAt = now;
-  speak(text, lang, opts);
+  speak(textTe, textEn, lang, opts);
 }
 
 function queueUtterance(textTe: string, textEn: string, lang: Lang, delay: number): void {
   setTimeout(() => {
     if (!("speechSynthesis" in window)) return;
-    const text = lang === "te" ? textTe : textEn;
-    speak(text, lang, { loud: true });
+    speak(textTe, textEn, lang, { loud: true });
   }, delay);
 }
 
