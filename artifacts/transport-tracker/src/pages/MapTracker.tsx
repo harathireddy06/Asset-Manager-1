@@ -113,6 +113,7 @@ export default function MapTracker() {
   const [displayPos, setDisplayPos] = useState<[number, number] | null>(null);
   const [busInfo, setBusInfo] = useState<SimBusInfo | null>(null);
   const [eta, setEta] = useState<string | null>(null);
+  const [remainingMinutes, setRemainingMinutes] = useState<number | null>(null);
   const [remainingKm, setRemainingKm] = useState<number | null>(null);
   const [intermediateStops, setIntermediateStops] = useState<string[]>([]);
   const [passedStopCount, setPassedStopCount] = useState(0);
@@ -165,6 +166,7 @@ export default function MapTracker() {
     setDisplayPos(fromCoord);
     setBusHistory([fromCoord]);
     setEta(formatEta(totalMinutes, lang));
+    setRemainingMinutes(totalMinutes);
     setRemainingKm(parseFloat(distKm.toFixed(1)));
 
     function animateTo(fromPos: [number, number], toPos: [number, number]) {
@@ -197,6 +199,7 @@ export default function MapTracker() {
 
       const remaining = Math.max(0, totalMinutes - step);
       setEta(formatEta(remaining, lang));
+      setRemainingMinutes(remaining);
       setRemainingKm(parseFloat((distKm * (1 - progress)).toFixed(1)));
 
       const passed = stops.filter((_, i) => {
