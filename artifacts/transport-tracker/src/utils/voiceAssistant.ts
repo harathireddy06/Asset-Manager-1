@@ -11,18 +11,49 @@ let _lastActionAt = 0;
 let _currentLang: Lang = "te";
 let _announcedNearby = new Set<string>();
 let _globalCleanup: (() => void) | null = null;
+let _cachedVoices: SpeechSynthesisVoice[] = [];
 
 const DEBOUNCE_MS = 4500;
 const ACTION_GUARD_MS = 300;
 
+if (typeof window !== "undefined" && "speechSynthesis" in window) {
+  const loadVoices = () => {
+    _cachedVoices = window.speechSynthesis.getVoices();
+  };
+  loadVoices();
+  window.speechSynthesis.onvoiceschanged = loadVoices;
+}
+
 function getTeluguVoice(): SpeechSynthesisVoice | null {
-  if (!("speechSynthesis" in window)) return null;
-  const voices = window.speechSynthesis.getVoices();
+  const voices = _cachedVoices.length ? _cachedVoices : window.speechSynthesis.getVoices();
   return (
     voices.find(v => v.lang === "te-IN") ||
     voices.find(v => v.lang.startsWith("te")) ||
     null
   );
+}
+
+function hasTeluguVoice(): boolean {
+  return getTeluguVoice() !== null;
+}
+
+function buildUtterance(
+  textTe: string,
+  textEn: string,
+  lang: Lang,
+  opts: SpeakOptions
+): SpeechSynthesisUtterance {
+  const teluguVoice = lang === "te" ? getTeluguVoice() : null;
+  const effectiveLang: Lang = lang === "te" && !teluguVoice ? "en" : lang;
+  const text = effectiveLang === "te" ? textTe : textEn;
+
+  const utt = new SpeechSynthesisUtterance(text);
+  utt.lang = effectiveLang === "te" ? "te-IN" : "en-IN";
+  utt.pitch = opts.loud ? 1.15 : 1.0;
+  utt.rate = opts.loud ? 0.72 : 0.85;
+  utt.volume = 1;
+  if (effectiveLang === "te" && teluguVoice) utt.voice = teluguVoice;
+  return utt;
 }
 
 export function setVoiceLang(lang: Lang): void {
@@ -40,14 +71,13 @@ export function speakTelugu(text: string, opts: SpeakOptions = {}): void {
 
   window.speechSynthesis.cancel();
 
+  const teluguVoice = getTeluguVoice();
   const utt = new SpeechSynthesisUtterance(text);
-  utt.lang = "te-IN";
+  utt.lang = teluguVoice ? "te-IN" : "en-IN";
   utt.pitch = opts.loud ? 1.15 : 1.0;
   utt.rate = opts.loud ? 0.72 : 0.85;
   utt.volume = 1;
-
-  const voice = getTeluguVoice();
-  if (voice) utt.voice = voice;
+  if (teluguVoice) utt.voice = teluguVoice;
 
   window.speechSynthesis.speak(utt);
 }
@@ -60,7 +90,10 @@ export function speakBilingual(
 ): void {
   if (!("speechSynthesis" in window)) return;
 
-  const text = lang === "te" ? textTe : textEn;
+  const teluguVoice = lang === "te" ? getTeluguVoice() : null;
+  const effectiveLang: Lang = lang === "te" && !teluguVoice ? "en" : lang;
+  const text = effectiveLang === "te" ? textTe : textEn;
+
   const now = Date.now();
   if (!opts.force && text === _lastText && now - _lastTime < DEBOUNCE_MS) return;
   _lastText = text;
@@ -70,31 +103,19 @@ export function speakBilingual(
   window.speechSynthesis.cancel();
 
   const utt = new SpeechSynthesisUtterance(text);
-  utt.lang = lang === "te" ? "te-IN" : "en-IN";
+  utt.lang = effectiveLang === "te" ? "te-IN" : "en-IN";
   utt.pitch = opts.loud ? 1.15 : 1.0;
   utt.rate = opts.loud ? 0.72 : 0.85;
   utt.volume = 1;
-
-  if (lang === "te") {
-    const voice = getTeluguVoice();
-    if (voice) utt.voice = voice;
-  }
+  if (effectiveLang === "te" && teluguVoice) utt.voice = teluguVoice;
 
   window.speechSynthesis.speak(utt);
 }
 
-function queueUtterance(text: string, lang: Lang, delay: number): void {
+function queueUtterance(textTe: string, textEn: string, lang: Lang, delay: number): void {
   setTimeout(() => {
     if (!("speechSynthesis" in window)) return;
-    const utt = new SpeechSynthesisUtterance(text);
-    utt.lang = lang === "te" ? "te-IN" : "en-IN";
-    utt.pitch = 1.15;
-    utt.rate = 0.72;
-    utt.volume = 1;
-    if (lang === "te") {
-      const voice = getTeluguVoice();
-      if (voice) utt.voice = voice;
-    }
+    const utt = buildUtterance(textTe, textEn, lang, { loud: true });
     window.speechSynthesis.speak(utt);
   }, delay);
 }
@@ -109,15 +130,19 @@ export function announceRoute(
   window.speechSynthesis.cancel();
   _lastActionAt = Date.now();
 
-  if (lang === "te") {
-    queueUtterance("మార్గం సెట్ అయింది", "te", 0);
-    queueUtterance(`బయలుదేరే స్థానం: ${villageFn(fromVillage)}`, "te", 1400);
-    queueUtterance(`చేరుకోవాల్సిన స్థానం: ${villageFn(toVillage)}`, "te", 3200);
-  } else {
-    queueUtterance("Route set", "en", 0);
-    queueUtterance(`Starting from: ${fromVillage}`, "en", 900);
-    queueUtterance(`Going to: ${toVillage}`, "en", 2200);
-  }
+  queueUtterance("మార్గం సెట్ అయింది", "Route set", lang, 0);
+  queueUtterance(
+    `బయలుదేరే స్థానం: ${villageFn(fromVillage)}`,
+    `Starting from: ${fromVillage}`,
+    lang,
+    lang === "te" ? 1400 : 900
+  );
+  queueUtterance(
+    `చేరుకోవాల్సిన స్థానం: ${villageFn(toVillage)}`,
+    `Going to: ${toVillage}`,
+    lang,
+    lang === "te" ? 3200 : 2200
+  );
 }
 
 export function announceApproachingStop(
