@@ -43,16 +43,16 @@ function buildUtterance(
   lang: Lang,
   opts: SpeakOptions
 ): SpeechSynthesisUtterance {
-  const teluguVoice = lang === "te" ? getTeluguVoice() : null;
-  const effectiveLang: Lang = lang === "te" && !teluguVoice ? "en" : lang;
-  const text = effectiveLang === "te" ? textTe : textEn;
-
+  const text = lang === "te" ? textTe : textEn;
   const utt = new SpeechSynthesisUtterance(text);
-  utt.lang = effectiveLang === "te" ? "te-IN" : "en-IN";
+  utt.lang = lang === "te" ? "te-IN" : "en-IN";
   utt.pitch = opts.loud ? 1.15 : 1.0;
   utt.rate = opts.loud ? 0.72 : 0.85;
   utt.volume = 1;
-  if (effectiveLang === "te" && teluguVoice) utt.voice = teluguVoice;
+  if (lang === "te") {
+    const voice = getTeluguVoice();
+    if (voice) utt.voice = voice;
+  }
   return utt;
 }
 
@@ -71,13 +71,13 @@ export function speakTelugu(text: string, opts: SpeakOptions = {}): void {
 
   window.speechSynthesis.cancel();
 
-  const teluguVoice = getTeluguVoice();
   const utt = new SpeechSynthesisUtterance(text);
-  utt.lang = teluguVoice ? "te-IN" : "en-IN";
+  utt.lang = "te-IN";
   utt.pitch = opts.loud ? 1.15 : 1.0;
   utt.rate = opts.loud ? 0.72 : 0.85;
   utt.volume = 1;
-  if (teluguVoice) utt.voice = teluguVoice;
+  const voice = getTeluguVoice();
+  if (voice) utt.voice = voice;
 
   window.speechSynthesis.speak(utt);
 }
@@ -90,9 +90,7 @@ export function speakBilingual(
 ): void {
   if (!("speechSynthesis" in window)) return;
 
-  const teluguVoice = lang === "te" ? getTeluguVoice() : null;
-  const effectiveLang: Lang = lang === "te" && !teluguVoice ? "en" : lang;
-  const text = effectiveLang === "te" ? textTe : textEn;
+  const text = lang === "te" ? textTe : textEn;
 
   const now = Date.now();
   if (!opts.force && text === _lastText && now - _lastTime < DEBOUNCE_MS) return;
@@ -103,11 +101,14 @@ export function speakBilingual(
   window.speechSynthesis.cancel();
 
   const utt = new SpeechSynthesisUtterance(text);
-  utt.lang = effectiveLang === "te" ? "te-IN" : "en-IN";
+  utt.lang = lang === "te" ? "te-IN" : "en-IN";
   utt.pitch = opts.loud ? 1.15 : 1.0;
   utt.rate = opts.loud ? 0.72 : 0.85;
   utt.volume = 1;
-  if (effectiveLang === "te" && teluguVoice) utt.voice = teluguVoice;
+  if (lang === "te") {
+    const voice = getTeluguVoice();
+    if (voice) utt.voice = voice;
+  }
 
   window.speechSynthesis.speak(utt);
 }
