@@ -26,7 +26,7 @@ const villages = [
   "Penuballi", "Kallur", "Tekulapally", "Illandu"
 ];
 
-router.get("/villages", (_req, res) => {
+router.get("/", (_req, res) => {
   const data=GetVillagesResponse.parse({ villages });
   res.json(data);
 });
