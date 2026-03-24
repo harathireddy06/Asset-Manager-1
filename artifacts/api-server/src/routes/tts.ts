@@ -3,7 +3,7 @@ import fetch from "node-fetch";
 
 const router = Router();
 
-router.get("/tts", async (req, res) => {
+router.get("/", async (req, res) => {
   const text = req.query["text"];
   const lang = (req.query["lang"] as string) || "te";
 
