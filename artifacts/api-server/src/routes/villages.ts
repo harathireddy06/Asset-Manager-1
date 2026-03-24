@@ -27,8 +27,8 @@ const villages = [
 ];
 
 router.get("/villages", (_req, res) => {
-  const data = GetVillagesResponse.parse({ villages });
-  res.json(data);
+  
+  res.json(villages);
 });
 
 export default router;
