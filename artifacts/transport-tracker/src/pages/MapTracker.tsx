@@ -136,12 +136,9 @@ export default function MapTracker() {
 
   const [villagesData, setVillagesData] = useState<string[]>([]);
 
-useEffect(() => {
-  fetch("https://trackitbackend-32rd.onrender.com/villages")
-    .then(res => res.json())
-    .then(data => setVillagesData(data))
-    .catch(err => console.log(err));
-}, []);
+  useEffect(() => {
+  setVillagesData(Object.keys(VILLAGE_COORDS));
+   }, []);
 
   const fromCoord = from ? VILLAGE_COORDS[from] : undefined;
   const toCoord = to ? VILLAGE_COORDS[to] : undefined;
