@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useGetVillages } from "@workspace/api-client-react";
+
 import {
   Navigation, MapPin, RotateCcw, Route as RouteIcon,
   Square, Play, ChevronDown, Grip, Mic, MicOff, Globe,
@@ -134,7 +134,14 @@ export default function MapTracker() {
   const dragState = useRef({ isDragging: false, startX: 0, startY: 0, panelX: 0, panelY: 0 });
   const [panelPos, setPanelPos] = useState({ x: 16, y: -1 });
 
-  const { data: villagesData } = useGetVillages();
+  const [villagesData, setVillagesData] = useState<string[]>([]);
+
+useEffect(() => {
+  fetch("https://trackitbackend-32rd.onrender.com/villages")
+    .then(res => res.json())
+    .then(data => setVillagesData(data))
+    .catch(err => console.log(err));
+}, []);
 
   const fromCoord = from ? VILLAGE_COORDS[from] : undefined;
   const toCoord = to ? VILLAGE_COORDS[to] : undefined;
