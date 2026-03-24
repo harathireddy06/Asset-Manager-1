@@ -135,13 +135,27 @@ export default function MapTracker() {
   const [panelPos, setPanelPos] = useState({ x: 16, y: -1 });
 
   const [villagesData, setVillagesData] = useState<string[]>([]);
-  useEffect(() => {
-  fetch("https://trackitbackend-32rd.onrender.com/api/villages")
-    .then(res => res.json())
-    .then(data => setVillagesData(data.villages)) // ✅ IMPORTANT
-    .catch(err => console.log(err));
+ useEffect(() => {
+  const fetchVillages = async (retry = 3) => {
+    try {
+      const res = await fetch("https://trackitbackend-32rd.onrender.com/api/villages");
+
+      if (!res.ok) throw new Error("Failed");
+
+      const data = await res.json();
+      setVillagesData(data.villages);
+
+    } catch (err) {
+      console.log("Retrying...", retry);
+
+      if (retry > 0) {
+        setTimeout(() => fetchVillages(retry - 1), 2000);
+      }
+    }
+  };
+
+  fetchVillages();
 }, []);
-  
 
   const fromCoord = from ? VILLAGE_COORDS[from] : undefined;
   const toCoord = to ? VILLAGE_COORDS[to] : undefined;
