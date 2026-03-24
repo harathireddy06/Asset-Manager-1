@@ -719,7 +719,7 @@ useEffect(() => {
                     className="flex-1 text-sm bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 outline-none focus:border-orange-400 text-gray-700 font-medium"
                   >
                     <option value="" disabled>{t("route.to")}</option>
-                    {villagesData?.villages.map(v => (
+                    {villagesData || []).map(v => (
                       <option key={v} value={v}>{villageName(v)}</option>
                     ))}
                   </select>
