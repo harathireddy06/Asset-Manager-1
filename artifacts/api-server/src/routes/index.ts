@@ -9,10 +9,10 @@ import ttsRouter from "./tts";
 const router: IRouter = Router();
 
 router.use("/health", healthRouter);
-router.use("/villages", villagesRouter);
-router.use("/buses", busesRouter);
-router.use("/eta", etaRouter);
-router.use("/notifications", notificationsRouter);
+router.use(villagesRouter);
+router.use(busesRouter);
+router.use(etaRouter);
+router.use(notificationsRouter);
 router.use("/tts", ttsRouter);
 
 export default router;
