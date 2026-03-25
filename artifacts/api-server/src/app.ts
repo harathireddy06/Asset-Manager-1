@@ -12,7 +12,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use("/api", router);
 
 if (process.env.NODE_ENV === "production") {
-  const frontendDist = path.join(__dirname, "../transport-tracker/dist");
+  const frontendDist = path.join(__dirname, "../../transport-tracker/dist");
 
   app.use(express.static(frontendDist));
 
