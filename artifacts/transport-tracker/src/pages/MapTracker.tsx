@@ -134,9 +134,8 @@ export default function MapTracker() {
   const dragState = useRef({ isDragging: false, startX: 0, startY: 0, panelX: 0, panelY: 0 });
   const [panelPos, setPanelPos] = useState({ x: 16, y: -1 });
 
-  const [villagesData, setVillagesData] = useState<string[]>([]);
- useEffect(() => {
-  const fetchVillages = async (retry = 3) => {
+  useEffect(() => {
+  const fetchVillages = async () => {
     try {
       const res = await fetch("/api/villages");
 
@@ -146,16 +145,13 @@ export default function MapTracker() {
       setVillagesData(data.villages);
 
     } catch (err) {
-      console.log("Retrying...", retry);
-
-      if (retry > 0) {
-        setTimeout(() => fetchVillages(retry - 1), 2000);
-      }
+      console.log("Error fetching villages:", err);
     }
   };
 
   fetchVillages();
-}, []);
+}, []);const [villagesData, setVillagesData] = useState<string[]>([]);
+
 
   const fromCoord = from ? VILLAGE_COORDS[from] : undefined;
   const toCoord = to ? VILLAGE_COORDS[to] : undefined;
