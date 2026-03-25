@@ -138,7 +138,7 @@ export default function MapTracker() {
  useEffect(() => {
   const fetchVillages = async (retry = 3) => {
     try {
-      const res = await fetch("https://trackitbackend-32rd.onrender.com/api/villages");
+      const res = await fetch("/api/villages");
 
       if (!res.ok) throw new Error("Failed");
 
